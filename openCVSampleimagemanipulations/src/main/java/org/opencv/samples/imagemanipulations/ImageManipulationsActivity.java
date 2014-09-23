@@ -31,13 +31,13 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     public static final int      VIEW_MODE_RGBA      = 0;
     public static final int      VIEW_MODE_HIST      = 1;
     public static final int      VIEW_MODE_CANNY     = 2;
-    public static final int      VIEW_MODE_SOBEL     = 4;
+    public static final int      VIEW_MODE_DOKI      = 4;
     public static final int      VIEW_MODE_ZOOM      = 5;
 
     private MenuItem             mItemPreviewRGBA;
     private MenuItem             mItemPreviewHist;
     private MenuItem             mItemPreviewCanny;
-    private MenuItem             mItemPreviewSobel;
+    private MenuItem             mItemPreviewDoki;
     private MenuItem             mItemPreviewZoom;
     private CameraBridgeViewBase mOpenCvCameraView;
 
@@ -119,7 +119,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         mItemPreviewRGBA  = menu.add("Preview RGBA");
         mItemPreviewHist  = menu.add("Histograms");
         mItemPreviewCanny = menu.add("Canny");
-        mItemPreviewSobel = menu.add("Sobel");
+        mItemPreviewDoki = menu.add("Doki");
         mItemPreviewZoom  = menu.add("Zoom");
         return true;
     }
@@ -133,8 +133,8 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
             viewMode = VIEW_MODE_HIST;
         else if (item == mItemPreviewCanny)
             viewMode = VIEW_MODE_CANNY;
-        else if (item == mItemPreviewSobel)
-            viewMode = VIEW_MODE_SOBEL;
+        else if (item == mItemPreviewDoki)
+            viewMode = VIEW_MODE_DOKI;
         else if (item == mItemPreviewZoom)
             viewMode = VIEW_MODE_ZOOM;
         return true;
@@ -237,14 +237,34 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
             rgbaInnerWindow.release();
             break;
 
-        case ImageManipulationsActivity.VIEW_MODE_SOBEL:
-            Mat gray = inputFrame.gray();
-            Mat grayInnerWindow = gray.submat(top, top + height, left, left + width);
+        case ImageManipulationsActivity.VIEW_MODE_DOKI:
             rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-            Imgproc.Sobel(grayInnerWindow, mIntermediateMat, CvType.CV_8U, 1, 1);
-            Core.convertScaleAbs(mIntermediateMat, mIntermediateMat, 10, 0);
+            Imgproc.Canny(rgbaInnerWindow, mIntermediateMat, 80, 90);
+
+            // HoughLinesP futtatasa
+            // http://docs.opencv.org/modules/imgproc/doc/feature_detection.html#houghlines
+            // http://stackoverflow.com/questions/7925698/android-opencv-drawing-hough-lines
+            Mat lines = new Mat();
+            int threshold = 50;
+            int minLineSize = 20;
+            int lineGap = 20;
+            Imgproc.HoughLinesP(mIntermediateMat, lines, 1, Math.PI/180, threshold, minLineSize, lineGap);
+
             Imgproc.cvtColor(mIntermediateMat, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-            grayInnerWindow.release();
+            for (int x = 0; x < lines.cols(); x++)
+            {
+                double[] vec = lines.get(0, x);
+                double x1 = vec[0],
+                        y1 = vec[1],
+                        x2 = vec[2],
+                        y2 = vec[3];
+                Point start = new Point(x1, y1);
+                Point end = new Point(x2, y2);
+
+                Core.line(rgbaInnerWindow, start, end, new Scalar(255,0,0), 3);
+
+            }
+
             rgbaInnerWindow.release();
             break;
 
