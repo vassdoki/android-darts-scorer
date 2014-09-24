@@ -1,13 +1,15 @@
 package org.opencv.samples.imagemanipulations;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
-import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfInt;
@@ -20,10 +22,13 @@ import org.opencv.imgproc.Imgproc;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
+import android.widget.SeekBar;
+import android.widget.TextView;
 
 public class ImageManipulationsActivity extends Activity implements CvCameraViewListener2 {
     private static final String  TAG                 = "OCVSample::Activity";
@@ -40,6 +45,17 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     private MenuItem             mItemPreviewDoki;
     private MenuItem             mItemPreviewZoom;
     private CameraBridgeViewBase mOpenCvCameraView;
+    private SeekBar              seek1, seek2, seek3;
+    private int canny1 = 290;
+    private int canny2 = 300;
+    private int line1tre = 80; // a felismert minimalis vonalhossz
+    private int line2tre = 20;
+    private int line3tre = 20;
+    private TextView t1, t2;
+    private TextView tRight;
+    private long prevTime;
+    private Point bull = null;
+
 
     private Size                 mSize0;
 
@@ -57,6 +73,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     private float                mBuff[];
 
     public static int           viewMode = VIEW_MODE_RGBA;
+    private static int          prevViewMode;
 
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -74,6 +91,11 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
             }
         }
     };
+    private Size numOfLines;
+    private Handler mHandler = new Handler();
+    private TextView t3;
+    private String debugStr;
+
 
     public ImageManipulationsActivity() {
         Log.i(TAG, "Instantiated new " + this.getClass());
@@ -90,6 +112,76 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+        seek1 = (SeekBar)findViewById(R.id.seek1);
+        seek2 = (SeekBar)findViewById(R.id.seek2);
+        seek3 = (SeekBar)findViewById(R.id.seek3);
+        seek1.setProgress(line1tre);
+        seek2.setProgress(line2tre);
+        seek3.setProgress(line3tre);
+        t1 = (TextView)findViewById(R.id.textView1); t1.setText("" + line1tre);
+        t2 = (TextView)findViewById(R.id.textView2); t2.setText("" + line2tre);
+        t3 = (TextView)findViewById(R.id.textView3); t3.setText("" + line3tre);
+        tRight = (TextView)findViewById(R.id.textViewRight);
+        prevViewMode = viewMode;
+
+        seek1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progresValue, boolean fromUser) {
+                switch (ImageManipulationsActivity.viewMode) {
+                    case ImageManipulationsActivity.VIEW_MODE_CANNY:
+                        canny1 = progresValue;
+                        break;
+                    case ImageManipulationsActivity.VIEW_MODE_DOKI:
+                        line1tre = progresValue;
+                        break;
+                }
+
+                }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        seek2.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progresValue, boolean fromUser) {
+                switch (ImageManipulationsActivity.viewMode) {
+                    case ImageManipulationsActivity.VIEW_MODE_CANNY:
+                        canny2 = progresValue;
+                        break;
+                    case ImageManipulationsActivity.VIEW_MODE_DOKI:
+                        line2tre = progresValue;
+                        break;
+                }
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        seek3.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progresValue, boolean fromUser) {
+                switch (ImageManipulationsActivity.viewMode) {
+                    case ImageManipulationsActivity.VIEW_MODE_CANNY:
+                        break;
+                    case ImageManipulationsActivity.VIEW_MODE_DOKI:
+                        line3tre = progresValue;
+                        break;
+                }
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
     }
 
     @Override
@@ -232,38 +324,201 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
         case ImageManipulationsActivity.VIEW_MODE_CANNY:
             rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-            Imgproc.Canny(rgbaInnerWindow, mIntermediateMat, 80, 90);
+            Imgproc.Canny(rgbaInnerWindow, mIntermediateMat, canny1, canny2);
             Imgproc.cvtColor(mIntermediateMat, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
             rgbaInnerWindow.release();
             break;
 
         case ImageManipulationsActivity.VIEW_MODE_DOKI:
             rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-            Imgproc.Canny(rgbaInnerWindow, mIntermediateMat, 80, 90);
+            Imgproc.Canny(rgbaInnerWindow, mIntermediateMat, canny1, canny2);
 
             // HoughLinesP futtatasa
             // http://docs.opencv.org/modules/imgproc/doc/feature_detection.html#houghlines
             // http://stackoverflow.com/questions/7925698/android-opencv-drawing-hough-lines
             Mat lines = new Mat();
-            int threshold = 50;
-            int minLineSize = 20;
-            int lineGap = 20;
+            int threshold = line1tre;
+            int minLineSize = line2tre;
+            int lineGap = line3tre;
             Imgproc.HoughLinesP(mIntermediateMat, lines, 1, Math.PI/180, threshold, minLineSize, lineGap);
+            numOfLines = lines.size();
 
-            Imgproc.cvtColor(mIntermediateMat, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-            for (int x = 0; x < lines.cols(); x++)
-            {
-                double[] vec = lines.get(0, x);
-                double x1 = vec[0],
-                        y1 = vec[1],
-                        x2 = vec[2],
-                        y2 = vec[3];
-                Point start = new Point(x1, y1);
-                Point end = new Point(x2, y2);
 
-                Core.line(rgbaInnerWindow, start, end, new Scalar(255,0,0), 3);
+            ArrayList<Double[]> fontosVonalak = new ArrayList<Double[]>();
 
+            boolean bullOk = false;
+            /*
+            if (bull != null) {
+                // azokat a vonalakat nézzük csak, amik közel vannak a bull-hoz:
+                for (int i = 0; i < lines.cols(); i++) {
+                    double[] vec = lines.get(0, i);
+                    double x1 = vec[0],
+                            y1 = vec[1],
+                            x2 = vec[2],
+                            y2 = vec[3];
+                    double x0 = bull.x;
+                    double y0 = bull.y;
+                    double tavolsag = Math.abs((x2 - x1)*(y1- y0) - (x1 - x0)*(y2-y1)) /
+                            Math.sqrt((x2 - x1)*(x2 - x1) + (y2 - y1)*(y2 - y1));
+                    if (tavolsag < 50) {
+                        Double[] v = new Double[5];
+                        v[0] = x1;
+                        v[1] = y1;
+                        v[2] = x2;
+                        v[3] = y2;
+                        v[4] = 0.0;
+                        fontosVonalak.add(v);
+
+                        Core.line(rgbaInnerWindow, new Point(x1,y1), new Point(x2,y2), new Scalar(255, 255, 0), 5);
+                    }
+                }
+                if (fontosVonalak.size() > 8) {
+                    // van eleg...
+                    bullOk = true;
+                    debugStr = "Bull ok #" + fontosVonalak.size();
+                    Core.circle(rgbaInnerWindow, bull, 50, new Scalar(255, 0, 255), 5);
+                }
             }
+            */
+
+            if (!bullOk) {
+                Imgproc.cvtColor(mIntermediateMat, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
+                for (int i = 0; i < lines.cols(); i++) {
+                    double[] vec = lines.get(0, i);
+                    double x1 = vec[0],
+                            y1 = vec[1],
+                            x2 = vec[2],
+                            y2 = vec[3];
+
+                    // meredekseg:
+                    double meredek = ((y2 - y1) / (double) (x2 - x1));
+                    boolean fontos = true;
+                    if (x2 - x1 < 0.00001) {
+                        // fuggoleges vonalak nem erdekelnek
+                        fontos = false;
+                    } else {
+                        for (Double[] f : fontosVonalak) {
+                            if (Math.abs(f[4] - meredek) < 0.5) {
+                                fontos = false;
+                            }
+                        }
+                    }
+                    if (fontos) {
+                        Double[] v = new Double[5];
+                        v[0] = x1;
+                        v[1] = y1;
+                        v[2] = x2;
+                        v[3] = y2;
+                        v[4] = meredek;
+                        fontosVonalak.add(v);
+
+                        Point start = new Point(x1, y1);
+                        Point end = new Point(x2, y2);
+                        Core.circle(rgbaInnerWindow, start, 5, new Scalar(100, 255, 0));
+                        Core.circle(rgbaInnerWindow, end, 5, new Scalar(100, 255, 0));
+                        Core.line(rgbaInnerWindow, start, end, new Scalar(155, 155, 0), 4);
+                    } else {
+                        Point start = new Point(x1, y1);
+                        Point end = new Point(x2, y2);
+                        //Core.circle(rgbaInnerWindow, start, 5, new Scalar(0, 255, 0));
+                        //Core.circle(rgbaInnerWindow, end, 5, new Scalar(0, 255, 0));
+                        //Core.line(rgbaInnerWindow, start, end, new Scalar(255,0,0), 1);
+                    }
+                }
+                debugStr = "Lines: " + numOfLines.width + " fontos: " + fontosVonalak.size();
+
+                HashMap<Point, Integer> metszespontok = new HashMap<Point, Integer>();
+                Log.d(TAG, "Metszespont: ============================================");
+                // minden fontos vonalnak kiszámoljuk a metszéspntját, és ezt is rárajzoljuk
+                for (int i = 0; i < fontosVonalak.size() - 1; i++) {
+                    for (int j = i + 1; j < fontosVonalak.size(); j++) {
+                        Double[] vec1 = fontosVonalak.get(i);
+                        Double[] vec2 = fontosVonalak.get(j);
+
+                        double a1 = (vec1[1] - vec1[3]) / (double) (vec1[0] - vec1[2]);
+                        double b1 = vec1[1] - a1 * vec1[0];
+
+                        double a2 = (vec2[1] - vec2[3]) / (double) (vec2[0] - vec2[2]);
+                        double b2 = vec2[1] - a2 * vec2[0];
+
+                        double x = (b2 - b1) / (a1 - a2);
+                        double y = a1 * x + b1;
+                        Point p = new Point(x, y);
+                        if (p.x > 0 && p.x < 5000 & p.y > 0 && p.y < 5000) {
+                            // benne van a kepben TODO: kene tudni a kep felbontasat...
+                            boolean megvan = false;
+                            for (Map.Entry<Point, Integer> entry : metszespontok.entrySet()) {
+                                Point key = entry.getKey();
+                                Integer value = entry.getValue();
+                                if (Math.abs(key.x - x) < 50 && Math.abs(key.y - y) < 50) {
+                                    metszespontok.put(key, new Integer(value + 1));
+                                    megvan = true;
+                                    Log.d(TAG, "Metszespont megvan: " + p.x + "," + p.y + " szam: " + (value + 1));
+                                }
+                            }
+                            if (!megvan) {
+                                Log.d(TAG, "Metszespont uj: " + p.x + "," + p.y);
+                                metszespontok.put(p, 1);
+                            }
+                        } else {
+                            //Log.d(TAG, "Metszespont nincs a kepen: " + p.x + "," + p.y);
+                        }
+                        Core.circle(rgbaInnerWindow, p, 10, new Scalar(0, 0, 255));
+                        //Core.line(rgbaInnerWindow, p, new Point(vec1[0], vec1[1]), new Scalar(0, 255, 0), 1);
+                        //Core.line(rgbaInnerWindow, p, new Point(vec2[0], vec2[1]), new Scalar(0, 255, 0), 1);
+                    }
+                }
+                // megkeressuk a legnagyobb metszespontot
+                int max = 0;
+                Point maxPoint = null;
+                Log.d(TAG, "Metszespont eredmeny: =============================================================");
+                for (Map.Entry<Point, Integer> entry : metszespontok.entrySet()) {
+                    Point key = entry.getKey();
+                    Integer value = entry.getValue();
+                    Log.d(TAG, "M;" + key.x + ";" + key.y + ";darab;" + value);
+                    if (value > max) {
+                        maxPoint = key;
+                        max = value;
+                    }
+                }
+                if (maxPoint != null) {
+                    debugStr = debugStr + " kozeppont megvan: " + maxPoint.x + "X" + maxPoint.y + " metszespont szam: " + max;
+                    Core.circle(rgbaInnerWindow, maxPoint, 20, new Scalar(255, 0, 255), 5);
+                    bull = maxPoint;
+                }
+            }
+
+            // minden vonalnak minden vonallal kiszámoljuk a metszéspntját, és ezt is rárajzoljuk
+            /*
+            if (1 == 2) {
+                for (int i = 0; i < lines.cols() - 1; i++) {
+                    for (int j = i + 1; j < lines.cols(); j++) {
+                        double[] vec1 = lines.get(0, i);
+                        double[] vec2 = lines.get(0, j);
+
+                        double a1 = (vec1[1] - vec1[3]) / (double) (vec1[0] - vec1[2]);
+                        double b1 = vec1[1] - a1 * vec1[0];
+
+                        double a2 = (vec2[1] - vec2[3]) / (double) (vec2[0] - vec2[2]);
+                        double b2 = vec2[1] - a2 * vec2[0];
+
+                        // parhuzamosak-e
+                        if (Math.abs(a1 - a2) < 0.1) {
+                            // elég párhuzamosak ahhoz, hogy ne érdekeljen
+                        } else {
+                            double x = (b2 - b1) / (a1 - a2);
+                            double y = a1 * x + b1;
+                            Point p = new Point(x, y);
+                            Core.circle(rgbaInnerWindow, p, 10, new Scalar(0, 0, 255));
+                            Core.line(rgbaInnerWindow, p, new Point(vec1[0], vec1[1]), new Scalar(0, 255, 0), 1);
+                            Core.line(rgbaInnerWindow, p, new Point(vec2[0], vec2[1]), new Scalar(0, 255, 0), 1);
+
+                        }
+                    }
+                }
+            }
+            */
+
 
             rgbaInnerWindow.release();
             break;
@@ -280,6 +535,52 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
         }
 
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                updateGui();
+            }
+        });
+
+
+
         return rgba;
+    }
+
+    private void updateGui() {
+        long now = System.nanoTime();
+        double lastFrame = 1000000000 / (now - prevTime);
+        prevTime = now;
+        tRight.setText(debugStr + " view: " + ImageManipulationsActivity.viewMode + " ?");
+
+        if (prevViewMode != ImageManipulationsActivity.viewMode) {
+            switch (ImageManipulationsActivity.viewMode) {
+                case ImageManipulationsActivity.VIEW_MODE_CANNY:
+                    seek1.setProgress(canny1);
+                    seek2.setProgress(canny2);
+                    break;
+                case ImageManipulationsActivity.VIEW_MODE_DOKI:
+                    seek1.setProgress(line1tre);
+                    seek2.setProgress(line2tre);
+                    break;
+            }
+            prevViewMode = ImageManipulationsActivity.viewMode;
+        }
+
+        switch (ImageManipulationsActivity.viewMode) {
+            case ImageManipulationsActivity.VIEW_MODE_CANNY:
+                tRight.setText(debugStr + " view: " + ImageManipulationsActivity.viewMode + " canny " + lastFrame + " fps");
+                t1.setText("" + canny1);
+                t2.setText("" + canny2);
+                break;
+            case ImageManipulationsActivity.VIEW_MODE_DOKI:
+                tRight.setText(debugStr + " view: " + ImageManipulationsActivity.viewMode + " doki" + lastFrame + " fps");
+                t1.setText("" + line1tre);
+                t2.setText("" + line2tre);
+                t3.setText("" + line3tre);
+                break;
+            default:
+                tRight.setText("" + lastFrame + " fps");
+        }
     }
 }
