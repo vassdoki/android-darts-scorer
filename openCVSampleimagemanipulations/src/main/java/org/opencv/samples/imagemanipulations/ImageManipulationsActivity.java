@@ -44,10 +44,11 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     private MenuItem             mItemPreviewCanny;
     private MenuItem             mItemPreviewDoki;
     private MenuItem             mItemPreviewZoom;
+
     private CameraBridgeViewBase mOpenCvCameraView;
     private SeekBar              seek1, seek2, seek3;
-    private int canny1 = 290;
-    private int canny2 = 300;
+    private int canny1 = 190;
+    private int canny2 = 200;
     private int line1tre = 80; // a felismert minimalis vonalhossz
     private int line2tre = 20;
     private int line3tre = 20;
@@ -271,10 +272,10 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         int rows = (int) sizeRgba.height;
         int cols = (int) sizeRgba.width;
 
-        int left = cols / 8;
+        int left = cols / 6;
         int top = rows / 8;
 
-        int width = cols * 3 / 4;
+        int width = cols * 2 / 3;
         int height = rows * 3 / 4;
 
         switch (ImageManipulationsActivity.viewMode) {
@@ -393,14 +394,62 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
                     // meredekseg:
                     double meredek = ((y2 - y1) / (double) (x2 - x1));
                     boolean fontos = true;
-                    if (x2 - x1 < 0.00001) {
-                        // fuggoleges vonalak nem erdekelnek
-                        fontos = false;
-                    } else {
-                        for (Double[] f : fontosVonalak) {
-                            if (Math.abs(f[4] - meredek) < 0.5) {
-                                fontos = false;
+
+                    // ha van bull, akkor nem fontos az olyan vonal, ami nagyon messze van
+                    if (bull != null) {
+                        double x0 = bull.x;
+                        double y0 = bull.y;
+                        double tavolsag = Math.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1)) /
+                                Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+                        if (tavolsag > 200) {
+                            fontos = false;
+                        }
+                    }
+                    /*
+                    // ez tul sok, ha elveszti a bull-t akkor soha nem talal vissza
+                    if (bull != null) {
+                        double x0 = bull.x;
+                        double y0 = bull.y;
+                        double tavolsag = Math.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1)) /
+                                Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+                        if (tavolsag > 60) {
+                            fontos = false;
+                        } else {
+                            // ha kozel van az egyenes, attol meg a szakasz lehet messze.
+                            // meg kell nezni a ket vegpont tavolsagat a bull-tol
+                            // es ha nincs elojel valtas a ket vegpont es a bull kozott, akkor a kozelebbik pont tavolsaga alapjan
+                            // ki lehet dobni
+                            if (!((Math.min(x1,x2) < x0 && Math.max(x1,x2) > x0) || (Math.min(y1,y2) < y0 && Math.max(y1,y2) > y0))) {
+                                // azonos terfelen van van minden vegpontja a vonalnak a bull-hoz kepest
+                                double t1 = Math.sqrt((x1 - x0)*(x1 - x0) + (y1 - y0)*(y1 - y0));
+                                double t2 = Math.sqrt((x2 - x0)*(x2 - x0) + (y2 - y0)*(y2 - y0));
+                                if (Math.min(t1,t2) > 60) {
+                                    fontos = false;
+                                }
                             }
+                        }
+                    }
+                    */
+                    if (fontos) {
+                        if (x2 - x1 < 0.00001) {
+                            // fuggoleges vonalak nem erdekelnek
+                            fontos = false;
+                        } else {
+                            for (Double[] f : fontosVonalak) {
+                                if (Math.abs(f[4] - meredek) < 0.5) {
+                                    fontos = false;
+                                }
+                            }
+                        }
+                    }
+                    if (bull != null && !fontos) {
+                        // ha van bull es kozel halad a vonal, akkor visszarakjuk a fontos koze
+                        double x0 = bull.x;
+                        double y0 = bull.y;
+                        double tavolsag = Math.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1)) /
+                                Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+                        if (tavolsag < 40) {
+                            fontos = true;
                         }
                     }
                     if (fontos) {
@@ -453,11 +502,11 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
                                 if (Math.abs(key.x - x) < 50 && Math.abs(key.y - y) < 50) {
                                     metszespontok.put(key, new Integer(value + 1));
                                     megvan = true;
-                                    Log.d(TAG, "Metszespont megvan: " + p.x + "," + p.y + " szam: " + (value + 1));
+                                    //Log.d(TAG, "Metszespont megvan: " + p.x + "," + p.y + " szam: " + (value + 1));
                                 }
                             }
                             if (!megvan) {
-                                Log.d(TAG, "Metszespont uj: " + p.x + "," + p.y);
+                                //Log.d(TAG, "Metszespont uj: " + p.x + "," + p.y);
                                 metszespontok.put(p, 1);
                             }
                         } else {
@@ -471,18 +520,18 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
                 // megkeressuk a legnagyobb metszespontot
                 int max = 0;
                 Point maxPoint = null;
-                Log.d(TAG, "Metszespont eredmeny: =============================================================");
+                //Log.d(TAG, "Metszespont eredmeny: =============================================================");
                 for (Map.Entry<Point, Integer> entry : metszespontok.entrySet()) {
                     Point key = entry.getKey();
                     Integer value = entry.getValue();
-                    Log.d(TAG, "M;" + key.x + ";" + key.y + ";darab;" + value);
+                    //Log.d(TAG, "M;" + key.x + ";" + key.y + ";darab;" + value);
                     if (value > max) {
                         maxPoint = key;
                         max = value;
                     }
                 }
                 if (maxPoint != null) {
-                    debugStr = debugStr + " kozeppont megvan: " + maxPoint.x + "X" + maxPoint.y + " metszespont szam: " + max;
+                    debugStr = debugStr + " kozeppont megvan: " + (int)maxPoint.x + "X" + (int)maxPoint.y + " metszespont szam: " + max;
                     Core.circle(rgbaInnerWindow, maxPoint, 20, new Scalar(255, 0, 255), 5);
                     bull = maxPoint;
                 }
@@ -574,7 +623,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
                 t2.setText("" + canny2);
                 break;
             case ImageManipulationsActivity.VIEW_MODE_DOKI:
-                tRight.setText(debugStr + " view: " + ImageManipulationsActivity.viewMode + " doki" + lastFrame + " fps");
+                tRight.setText(debugStr + " view: " + ImageManipulationsActivity.viewMode + " doki " + lastFrame + " fps");
                 t1.setText("" + line1tre);
                 t2.setText("" + line2tre);
                 t3.setText("" + line3tre);
