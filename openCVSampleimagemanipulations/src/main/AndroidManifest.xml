@@ -13,11 +13,18 @@
                   android:label="@string/app_name"
                   android:screenOrientation="landscape"
                   android:configChanges="keyboardHidden|orientation">
+        </activity>
+
+        <activity android:name=".DokiPicture"
+            android:label="DokiLabel"
+                >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
+
     </application>
 
     <supports-screens android:resizeable="true"
@@ -27,6 +34,8 @@
                       android:anyDensity="true" />
 
     <uses-sdk android:minSdkVersion="8" />
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <uses-permission android:name="android.permission.CAMERA"/>
 

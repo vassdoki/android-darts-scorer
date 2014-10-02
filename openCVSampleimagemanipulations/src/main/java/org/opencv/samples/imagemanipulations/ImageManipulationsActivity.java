@@ -21,6 +21,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.imgproc.Imgproc;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -43,7 +44,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
     private MenuItem             mItemPreviewHist;
     private MenuItem             mItemPreviewCanny;
     private MenuItem             mItemPreviewDoki;
-    private MenuItem             mItemPreviewZoom;
+    private MenuItem mItemDokiPicture;
 
     private CameraBridgeViewBase mOpenCvCameraView;
     private SeekBar              seek1, seek2, seek3;
@@ -99,7 +100,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
 
 
     public ImageManipulationsActivity() {
-        Log.i(TAG, "Instantiated new " + this.getClass());
+        Log.i(TAG, "Instantiated new ImageManipulationsActivity");
     }
 
     /** Called when the activity is first created. */
@@ -213,7 +214,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
         mItemPreviewHist  = menu.add("Histograms");
         mItemPreviewCanny = menu.add("Canny");
         mItemPreviewDoki = menu.add("Doki");
-        mItemPreviewZoom  = menu.add("Zoom");
+        mItemDokiPicture = menu.add("Photo");
         return true;
     }
 
@@ -228,8 +229,10 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
             viewMode = VIEW_MODE_CANNY;
         else if (item == mItemPreviewDoki)
             viewMode = VIEW_MODE_DOKI;
-        else if (item == mItemPreviewZoom)
-            viewMode = VIEW_MODE_ZOOM;
+        else if (item == mItemDokiPicture) {
+            Intent intent = new Intent(this, DokiPicture.class);
+            startActivity(intent);
+        }
         return true;
     }
 
@@ -442,6 +445,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
                             }
                         }
                     }
+                    /*
                     if (bull != null && !fontos) {
                         // ha van bull es kozel halad a vonal, akkor visszarakjuk a fontos koze
                         double x0 = bull.x;
@@ -452,6 +456,7 @@ public class ImageManipulationsActivity extends Activity implements CvCameraView
                             fontos = true;
                         }
                     }
+                    */
                     if (fontos) {
                         Double[] v = new Double[5];
                         v[0] = x1;
