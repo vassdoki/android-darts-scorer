@@ -1,6 +1,7 @@
 package org.opencv.samples.imagemanipulations;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -19,18 +20,27 @@ import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.opencv.core.Core.NORM_MINMAX;
+import static org.opencv.core.Core.convertScaleAbs;
+import static org.opencv.core.Core.normalize;
 
 /**
  * Created by vassdoki on 10/2/14.
@@ -202,6 +212,8 @@ public class DokiPicture extends Activity {
         Bitmap bmp32 = bitmap.copy(Bitmap.Config.ARGB_8888, true);
         Mat imgMAT = new Mat();
         Utils.bitmapToMat(bmp32, imgMAT);
+        //saveImageToDisk(imgMAT, "step0-orig", "doki", this, Imgproc.COLOR_RGBA2RGB);
+
 
         Mat temp = new Mat();
         int canny1 = 180;
@@ -216,6 +228,7 @@ public class DokiPicture extends Activity {
 
         Imgproc.cvtColor(temp, imgMAT, Imgproc.COLOR_GRAY2BGRA, 4);
         temp.release();
+        saveImageToDisk(imgMAT, "step1-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         ArrayList<Double[]> fontosVonalak = new ArrayList<Double[]>();
         minx = 1000000;
@@ -254,6 +267,7 @@ public class DokiPicture extends Activity {
                 fontosVonalak.add(v);
             }
         }
+        saveImageToDisk(imgMAT, "step2-vonalak", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         // --------------------------------------------------------------------
         // a fontos vonalak metszespontjait szamoljuk
@@ -306,6 +320,7 @@ public class DokiPicture extends Activity {
                 //Core.line(rgbaInnerWindow, p, new Point(vec2[0], vec2[1]), new Scalar(0, 255, 0), 1);
             }
         }
+        saveImageToDisk(imgMAT, "step3-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         // --------------------------------------------------------------------
         // megkeressuk a legnagyobb metszespontot
@@ -378,6 +393,101 @@ public class DokiPicture extends Activity {
         }
         //bitmap = Bitmap.createBitmap(imgMAT.cols(), imgMAT.rows(), Bitmap.Config.ARGB_8888);
         // kivagunk egy akkorat, mint amekkora a bitmap a bull-lal kozepen
+        saveImageToDisk(imgMAT, "step4-bull", "doki", this, Imgproc.COLOR_RGBA2RGB);
+
+// -------------------------------------------------
+        Mat src = new Mat();
+        Mat src_gray = new Mat();
+        Utils.bitmapToMat(bmp32, src);
+        Imgproc.cvtColor(src, src_gray, Imgproc.COLOR_RGBA2GRAY);
+        saveImageToDisk(src_gray, "step7-gray.jpg", "doki", this, -1);
+
+        Mat dst;
+        Mat dst_norm = new Mat();
+        Mat dst_norm_scaled = new Mat();
+        dst = Mat.zeros( src.size(), CvType.CV_32FC1 );
+
+        /// Detector parameters
+        int blockSize = 4; // 2
+        int apertureSize = 3;
+        double k = 0.001; // 0.04
+        /// Detecting corners
+        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_DEFAULT);
+        /// Normalizing
+        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
+        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
+        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled.jpg", "doki", this, -1);
+
+        k = 0.001;
+        blockSize=4;
+        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_ISOLATED);
+        /// Normalizing
+        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
+        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
+        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-01.jpg", "doki", this, -1);
+
+        k = 0.001;
+        blockSize=4;
+        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_REFLECT);
+        /// Normalizing
+        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
+        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
+        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-02.jpg", "doki", this, -1);
+
+        k = 0.001;
+        blockSize=4;
+        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_CONSTANT);
+        /// Normalizing
+        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
+        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
+        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-03.jpg", "doki", this, -1);
+
+        k = 0.001;
+        blockSize=4;
+        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_TRANSPARENT);
+        /// Normalizing
+        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
+        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
+        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-04.jpg", "doki", this, -1);
+
+        k = 0.001;
+        blockSize = 4;
+        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_WRAP);
+        /// Normalizing
+        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
+        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
+        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-05.jpg", "doki", this, -1);
+
+
+
+
+        //Imgproc.cvtColor(dst_norm, src, Imgproc.COLOR_);
+        //saveImageToDisk(dst_norm, "step7-cornerHarrisDstNorm.jpg", "doki", this, -1);
+        //saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled.jpg", "doki", this, -1);
+        //saveImageToDisk(dst_norm, "step7-cornerHarrisDstNorm.jpg", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        //saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled.jpg", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        //saveImageToDisk(dst, "step7-cornerHarris1.jpg", "doki", this, Imgproc.COLOR_RGBA2RGB);
+
+        /// Drawing a circle around corners
+//        int thresh = 200;
+//        int max_thresh = 255;
+//        int circ = 0;
+//        for( int j = 0; j < dst_norm.rows() ; j++ ) {
+//            if (j%20 == 0) {
+//                Log.i(TAG, "j: " + j + " circ: " + circ);
+//            }
+//            for( int i = 0; i < dst_norm.cols(); i++ ) {
+//                if( (int) dst_norm.get(j,i)[0] > thresh ) {
+//                    Core.circle(dst_norm_scaled, new Point(i, j), 5, new Scalar(0), 2, 8, 0);
+//                    circ++;
+//                }
+//            }
+//        }
+//        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormCirc.jpg", "doki", this, -1);
+        /// Showing the result
+// -------------------------------------------------
+
+
 
         int h = mImageView.getHeight();
         int w = mImageView.getWidth();
@@ -397,8 +507,11 @@ public class DokiPicture extends Activity {
             colStart -= (colEnd - maxCols);
             colEnd -= (colEnd - maxCols);
         }
-        
+
+        rowEnd += h - (rowEnd - rowStart); // ha nem pixel pontos, akkor itt javitjuk
+        colEnd += w - (colEnd - colStart);
         imgMAT = imgMAT.submat(rowStart, rowEnd, colStart, colEnd);
+        saveImageToDisk(imgMAT, "step5-submat", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(imgMAT, bitmap);
@@ -414,7 +527,51 @@ public class DokiPicture extends Activity {
         maxy = Math.max(maxy, y);
     }
 
+    public void saveImageToDisk(Mat source, String filename, String directoryName, Context ctx, int colorConversion){
 
+        Mat mat = source.clone();
+        if(colorConversion != -1)
+            Imgproc.cvtColor(mat, mat, colorConversion, 4);
+
+        Bitmap bmpOut = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(mat, bmpOut);
+        if (bmpOut != null){
+
+            mat.release();
+            OutputStream fout = null;
+            String root = Environment.getExternalStorageDirectory().getAbsolutePath();
+            String dir = root + "/" + ctx.getResources().getString(R.string.app_name) + "/" + directoryName;
+            String fileName = filename;
+            if (!filename.contains(".jpg")) {
+                fileName = filename + ".png";
+            }
+
+            File file = new File(dir);
+            Log.i(TAG, "DIR: " + dir + " file: " + fileName);
+            file.mkdirs();
+            file = new File(dir, fileName);
+
+            try {
+                fout = new FileOutputStream(file);
+                BufferedOutputStream bos = new BufferedOutputStream(fout);
+                if (filename.contains(".jpg")) {
+                    bmpOut.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+                } else {
+                    bmpOut.compress(Bitmap.CompressFormat.PNG, 100, bos);
+                }
+                bos.flush();
+                bos.close();
+                bmpOut.recycle();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
+
+            catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        bmpOut.recycle();
+    }
     @Override
     public void onPause()
     {
