@@ -55,6 +55,8 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
+    private int saveStepsToImage = 5;
+
     public DokiPicture() {
         Log.i(TAG, "Activity created");
     }
@@ -215,20 +217,19 @@ public class DokiPicture extends Activity {
         //saveImageToDisk(imgMAT, "step0-orig", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
 
-        Mat temp = new Mat();
+        Mat matCanny = new Mat();
         int canny1 = 180;
         int canny2 = 190;
-        Imgproc.Canny(imgMAT, temp, canny1, canny2);
+        Imgproc.Canny(imgMAT, matCanny, canny1, canny2);
 
         Mat lines = new Mat();
         int threshold = 80;
         int minLineSize = 20;
         int lineGap = 20;
-        Imgproc.HoughLinesP(temp, lines, 1, Math.PI/180, threshold, minLineSize, lineGap);
+        Imgproc.HoughLinesP(matCanny, lines, 1, Math.PI/180, threshold, minLineSize, lineGap);
 
-        Imgproc.cvtColor(temp, imgMAT, Imgproc.COLOR_GRAY2BGRA, 4);
-        temp.release();
-        saveImageToDisk(imgMAT, "step1-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        Imgproc.cvtColor(matCanny, matCanny, Imgproc.COLOR_GRAY2BGRA, 4);
+        saveImageToDisk(matCanny, "step1-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         ArrayList<Double[]> fontosVonalak = new ArrayList<Double[]>();
         minx = 1000000;
@@ -408,58 +409,90 @@ public class DokiPicture extends Activity {
         dst = Mat.zeros( src.size(), CvType.CV_32FC1 );
 
         /// Detector parameters
-        int blockSize = 4; // 2
-        int apertureSize = 3;
-        double k = 0.001; // 0.04
+        int blockSize = 2;
+        int apertureSize = 5;
+        double k = 0.05; // 0.04
         /// Detecting corners
+        //Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
+        //Core.convertScaleAbs(dst_norm, dst_norm_scaled);
         Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_DEFAULT);
-        /// Normalizing
-        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
-        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
-        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled.jpg", "doki", this, -1);
 
-        k = 0.001;
-        blockSize=4;
-        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_ISOLATED);
-        /// Normalizing
-        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
-        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
-        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-01.jpg", "doki", this, -1);
+        double minH = 999;
+        double maxH = -999;
 
-        k = 0.001;
-        blockSize=4;
-        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_REFLECT);
-        /// Normalizing
-        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
-        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
-        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-02.jpg", "doki", this, -1);
+        Log.i(TAG, "Ciklus elott blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + " rows: " + dst.rows() + " cols: " + dst.cols());
+        int dstChannels = dst.channels();
+        int pixelNum = (int)dst.total() * dstChannels;
+        int type = dst.type();
+        float[] dstPixels = new float[pixelNum];
+        dst.get(0,0,dstPixels);
+        for (int j = 0; j < pixelNum; j+=dstChannels) {
+                minH = Math.min(dstPixels[j], minH);
+                maxH = Math.max(dstPixels[j], maxH);
+        }
 
-        k = 0.001;
-        blockSize=4;
-        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_CONSTANT);
-        /// Normalizing
-        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
-        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
-        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-03.jpg", "doki", this, -1);
+        Log.i(TAG, "XXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + ":min:" + minH + ":max:" + maxH);
+        //Mat harrisResult = imgMAT.clone();
+        int nullak = 0;
+        double val;
+        Scalar color;
+        double v0;
+        int i,j;
+        int cols = dst.cols();
+        Point start, end;
+        for (int di = 0; di < pixelNum; di+=dstChannels) {
+            i = di % cols;
+            j = di / cols;
+            val = dstPixels[di];
+            if (Math.abs(val) > 0.0001) {
+                if (val < 0) {
+                    v0 = 127 + 128 * val / minH;
+                    color = new Scalar(v0, 0, 0);
+                    //Core.circle(matCanny, new Point(i, j), 1, color, 1);
+                    start = new Point(i, j);
+                    end = new Point(i, j);
+                    Core.line(matCanny, start, end, color, 1);
+                } else {
+                    v0 = 127 + 128 * val / maxH;
+                    color = new Scalar(0, v0, 0);
+                    //Core.circle(matCanny, new Point(i, j), 1, color, 1);
+                    start = new Point(i, j);
+                    end = new Point(i, j);
+                    Core.line(matCanny, start, end, color, 1);
+                }
+            } else {
+                nullak++;
+            }
+        }
+        Log.i(TAG, "nullak: " + nullak);
+        //saveImageToDisk(harrisResult, "step7-cornerHarrisDstNormScaled-d.jpg", "doki", this, -1);
+        saveImageToDisk(matCanny, "step7-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB,7);
 
-        k = 0.001;
-        blockSize=4;
-        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_TRANSPARENT);
-        /// Normalizing
-        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
-        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
-        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-04.jpg", "doki", this, -1);
-
-        k = 0.001;
-        blockSize = 4;
-        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_WRAP);
-        /// Normalizing
-        Core.normalize(dst, dst_norm, 0, 255, NORM_MINMAX, CvType.CV_32FC1, new Mat());
-        Core.convertScaleAbs( dst_norm, dst_norm_scaled );
-        saveImageToDisk(dst_norm_scaled, "step7-cornerHarrisDstNormScaled-05.jpg", "doki", this, -1);
-
-
-
+        /*
+        for(int blockSize = 2; blockSize <= 3; blockSize++) {
+            for (int apertureSize = 3; apertureSize <= 5; apertureSize++) {
+                for (double k = 0.03; k <= 0.06; k += 0.005) {
+                    //Log.i(TAG, "blockSize: " + blockSize + " apertureSize: " + apertureSize + " k: " + k + " ");
+                    try {
+                        Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_DEFAULT);
+                        double minH = 999;
+                        double maxH = -999;
+                        Log.i(TAG, "Ciklus elott blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + " rows: " + dst.rows() + " cols: " + dst.cols());
+                        for (int j = 0; j < (dst.cols() ); j++) {
+                            for (int i = 0; i < (dst.rows() ); i++) {
+                                Double p = dst.get(i, j)[0];
+                                minH = Math.min(p, minH);
+                                maxH = Math.max(p, maxH);
+                            }
+                        }
+                        Log.i(TAG, "XXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + ":min:" + minH + ":max:" + maxH);
+                    }catch(Exception e) {
+                        Log.i(TAG, "XXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k:" + k + ":Kikattant...." + e.getMessage());
+                    }
+                }
+            }
+        }
+        */
 
         //Imgproc.cvtColor(dst_norm, src, Imgproc.COLOR_);
         //saveImageToDisk(dst_norm, "step7-cornerHarrisDstNorm.jpg", "doki", this, -1);
@@ -527,50 +560,52 @@ public class DokiPicture extends Activity {
         maxy = Math.max(maxy, y);
     }
 
-    public void saveImageToDisk(Mat source, String filename, String directoryName, Context ctx, int colorConversion){
+    public void saveImageToDisk(Mat source, String filename, String directoryName, Context ctx, int colorConversion) {
+        saveImageToDisk(source, filename, directoryName, ctx, colorConversion, 0);
+    }
+    public void saveImageToDisk(Mat source, String filename, String directoryName, Context ctx, int colorConversion, int level){
+        if (saveStepsToImage <= level) {
+            Mat mat = source.clone();
+            if (colorConversion != -1)
+                Imgproc.cvtColor(mat, mat, colorConversion, 4);
 
-        Mat mat = source.clone();
-        if(colorConversion != -1)
-            Imgproc.cvtColor(mat, mat, colorConversion, 4);
+            Bitmap bmpOut = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(mat, bmpOut);
+            if (bmpOut != null) {
 
-        Bitmap bmpOut = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(mat, bmpOut);
-        if (bmpOut != null){
-
-            mat.release();
-            OutputStream fout = null;
-            String root = Environment.getExternalStorageDirectory().getAbsolutePath();
-            String dir = root + "/" + ctx.getResources().getString(R.string.app_name) + "/" + directoryName;
-            String fileName = filename;
-            if (!filename.contains(".jpg")) {
-                fileName = filename + ".png";
-            }
-
-            File file = new File(dir);
-            Log.i(TAG, "DIR: " + dir + " file: " + fileName);
-            file.mkdirs();
-            file = new File(dir, fileName);
-
-            try {
-                fout = new FileOutputStream(file);
-                BufferedOutputStream bos = new BufferedOutputStream(fout);
-                if (filename.contains(".jpg")) {
-                    bmpOut.compress(Bitmap.CompressFormat.JPEG, 100, bos);
-                } else {
-                    bmpOut.compress(Bitmap.CompressFormat.PNG, 100, bos);
+                mat.release();
+                OutputStream fout = null;
+                String root = Environment.getExternalStorageDirectory().getAbsolutePath();
+                String dir = root + "/" + ctx.getResources().getString(R.string.app_name) + "/" + directoryName;
+                String fileName = filename;
+                if (!filename.contains(".jpg")) {
+                    fileName = filename + ".png";
                 }
-                bos.flush();
-                bos.close();
-                bmpOut.recycle();
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            }
 
-            catch (IOException e) {
-                e.printStackTrace();
+                File file = new File(dir);
+                Log.i(TAG, "DIR: " + dir + " file: " + fileName);
+                file.mkdirs();
+                file = new File(dir, fileName);
+
+                try {
+                    fout = new FileOutputStream(file);
+                    BufferedOutputStream bos = new BufferedOutputStream(fout);
+                    if (filename.contains(".jpg")) {
+                        bmpOut.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+                    } else {
+                        bmpOut.compress(Bitmap.CompressFormat.PNG, 100, bos);
+                    }
+                    bos.flush();
+                    bos.close();
+                    bmpOut.recycle();
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
+            bmpOut.recycle();
         }
-        bmpOut.recycle();
     }
     @Override
     public void onPause()
