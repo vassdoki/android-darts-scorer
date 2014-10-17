@@ -115,7 +115,17 @@ public class DokiPicture extends Activity {
         }
 
         public double getAngeInDegree() {
-            return Math.atan2(start.y - end.y, start.x - end.x);
+            double y = start.y - end.y;
+            double x = start.x - end.x;
+            double v = 180 * Math.atan2(y, x) / Math.PI;
+            if (v > 180) {
+                v = 180;
+            }
+            if (v < -180) {
+                v = -180;
+            }
+            //Log.i(TAG, "arch: y: " + y + " x: " + x + " archtan: " + v);
+            return v;
         }
     }
 
@@ -265,7 +275,12 @@ public class DokiPicture extends Activity {
         Imgproc.Canny(matOriginalPhoto, matCanny, paramCanny1, paramCanny2);
         Log.i(TAG, "Canny processed");
 
-
+        // do harris instead of canny
+//        Mat harrisResult = Mat.zeros( matOriginalPhoto.size(), CvType.CV_8UC3);
+//        doHarrisProc(matOriginalPhoto, harrisResult);
+//        saveImageToDisk(harrisResult, "step0-harris.jpg", "doki", this, -1);
+//        Imgproc.cvtColor(harrisResult, matCanny, Imgproc.COLOR_RGBA2GRAY);
+//        saveImageToDisk(matCanny, "step0-harris2.jpg", "doki", this, -1);
 
         Mat matLines = new Mat();
         Imgproc.HoughLinesP(matCanny, matLines, 1, Math.PI/180, paramHLthreshold, paramHLminLineSize, paramHLlineGap);
@@ -286,7 +301,7 @@ public class DokiPicture extends Activity {
         // a fontos vonalak metszespontjait szamoljuk
         Log.i(TAG, "HL fonos vonalak metszespontja");
         Point pointBull = findBullFromGoodLines(goodLines, matOriginalCopy);
-        saveImageToDisk(matOriginalCopy, "step3-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        saveImageToDisk(matOriginalCopy, "step3-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 3);
 
         // --------------------------------------------------------------------
         // vegig megyunk az osszes vonalon, es a bullon atmenoket megkeressuk
@@ -298,9 +313,9 @@ public class DokiPicture extends Activity {
         saveImageToDisk(matOriginalCopy, "step4-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
 
 // -------------------------------------------------
-//        Log.i(TAG, "Harris");
-//        doHarrisProc(matOriginalPhoto, matCanny);
-//        saveImageToDisk(matCanny, "step7-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB,7);
+        Log.i(TAG, "Harris");
+        doHarrisProc(matOriginalPhoto, matCanny);
+        saveImageToDisk(matCanny, "step7-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB,7);
 // -------------------------------------------------
 
         int h = mImageView.getHeight();
@@ -325,7 +340,7 @@ public class DokiPicture extends Activity {
         rowEnd += h - (rowEnd - rowStart); // ha nem pixel pontos, akkor itt javitjuk
         colEnd += w - (colEnd - colStart);
         matOriginalCopy = matOriginalCopy.submat(rowStart, rowEnd, colStart, colEnd);
-        saveImageToDisk(matOriginalCopy, "step5-submat", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        //saveImageToDisk(matOriginalCopy, "step5-submat", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(matOriginalCopy, bitmap);
@@ -349,8 +364,8 @@ public class DokiPicture extends Activity {
         double k = 0.05; // 0.04
         Imgproc.cornerHarris(src_gray, dst, blockSize, apertureSize, k, Imgproc.BORDER_DEFAULT);
 
-        double minH = 999;
-        double maxH = -999;
+        float minH = 999;
+        float maxH = -999;
 
         Log.i(TAG, "Ciklus elott blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + " rows: " + dst.rows() + " cols: " + dst.cols());
         int dstChannels = dst.channels();
@@ -414,7 +429,7 @@ public class DokiPicture extends Activity {
                     // ha az egyenes kozel van, attol meg maga a szakasz lehet tavol
                     if (l.endDistance(pointBull) < 50) {
                         double angle = l.getAngeInDegree();
-                        Log.i(TAG, "Angle: " + angle + " degree: " + (angle * (180 / Math.PI)));
+                        //Log.i(TAG, "Angle: " + angle + " degree: " + (angle * (180 / Math.PI)));
                         if (firstAngle == Double.MIN_VALUE) {
                             firstAngle = angle;
                         }
@@ -428,7 +443,7 @@ public class DokiPicture extends Activity {
                     }
                 } else {
                     // az iranya sem jo
-                    Core.line(matOriginalCopy, l.start, l.end, new Scalar(240, 38, 255), 4);
+                    //Core.line(matOriginalCopy, l.start, l.end, new Scalar(240, 38, 255), 4);
                 }
             }
             Core.line(matOriginalCopy, new Point(minx, miny), new Point(minx, maxy), new Scalar(0, 0, 255), 4);
@@ -522,7 +537,9 @@ public class DokiPicture extends Activity {
 
             // vegig nezzuk az osszes fontos vonalat, es ha ennek a meredeksege elter, akkor lesz fontos csak
             for(MLine l: goodLines) {
-                if (Math.abs(l.angle - mLine.angle) < 0.5) {
+                //if (Math.abs(l.angle - mLine.angle) < 0.5) {
+                //Log.i(TAG, "l degree: " + l.getAngeInDegree() + " mLine degree: " + mLine.getAngeInDegree() + " diff: " + Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()));
+                if (Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) < 3 || Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) > 180 - 3) {
                     isGood = false;
                 }
             }
@@ -581,10 +598,8 @@ public class DokiPicture extends Activity {
         Bitmap bitmap = BitmapFactory.decodeFile(mCurrentPhotoPath, bmOptions);
 
         Mat imgMAT = new Mat();
-        {
-            Bitmap bmp32 = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-            Utils.bitmapToMat(bmp32, imgMAT);
-        }
+        Bitmap bmp32 = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+        Utils.bitmapToMat(bmp32, imgMAT);
         return imgMAT;
     }
 
