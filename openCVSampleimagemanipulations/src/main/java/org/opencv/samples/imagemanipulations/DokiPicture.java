@@ -25,6 +25,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.utils.Converters;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -36,7 +37,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.opencv.core.Core.convertScaleAbs;
 import static org.opencv.core.Core.normalize;
@@ -54,7 +57,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 9;
+    private int saveStepsToImage = 10;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -97,6 +100,11 @@ public class DokiPicture extends Activity {
         public double getPerpAngle() {
             return (start.x - end.x) / (start.y - end.y);
         }
+
+        public double length() {
+            return Math.sqrt(sq(start.x - end.x) + sq(start.y - end.y));
+        }
+
         public double distance(Point b) {
             return Math.abs((end.x - start.x) * (start.y - b.y) - (start.x - b.x) * (end.y - start.y)) /
                     Math.sqrt(sq(end.x - start.x) + sq(end.y - start.y));
@@ -112,10 +120,22 @@ public class DokiPicture extends Activity {
          * @param b
          * @return
          */
-        public double endDistance(Point b) {
+        public double endDistanceOrDistance(Point b) {
             if (start.x < b.x && b.x < end.x && start.y < b.y && b.y < end.y) {
                 return distance(b);
             }
+            double dstFromStart = Math.sqrt(sq(b.x - start.x) + sq(b.y - start.y));
+            double dstFromEnd = Math.sqrt(sq(b.x - end.x) + sq(b.y - end.y));
+            return Math.min(dstFromStart, dstFromEnd);
+
+
+        }
+        /**
+         * The closest distance from the start and the end of the line.
+         * @param b
+         * @return
+         */
+        public double endDistance(Point b) {
             double dstFromStart = Math.sqrt(sq(b.x - start.x) + sq(b.y - start.y));
             double dstFromEnd = Math.sqrt(sq(b.x - end.x) + sq(b.y - end.y));
             return Math.min(dstFromStart, dstFromEnd);
@@ -157,6 +177,33 @@ public class DokiPicture extends Activity {
             } else {
                 return (int)Math.abs(start.y - end.y);
             }
+        }
+
+        public Point mirrorPoint(Point p, Point c) {
+            Point r = new Point();
+            r.x = p.x + 2 * (c.x - p.x);
+            r.y = p.y + 2 * (c.y - p.y);
+            return r;
+        }
+        public double distanceOfTwoPoints(Point a, Point b) {
+            return Math.sqrt(sq(a.x - b.x) + sq(a.y - b.y));
+        }
+
+        public Point rotatePoint(Point c, double degree, double radius) {
+            Point p = new Point();
+            double sin = Math.sin(Math.PI * degree / 180);
+            p.x = c.x + sin * radius;
+            Log.i(TAG, "rotatePoint, bull: " + c.x +","+ c.y + " radius: " + radius + " degree: " + degree + " sin: " + sin);
+            double cos = Math.cos(Math.PI * degree / 180);
+            p.y = c.y + cos * radius;
+            return p;
+        }
+
+        public double getTwoPointAngle(Point bull, Point a) {
+            double y = a.y - bull.y;
+            double x = a.x - bull.x;
+            double v = 180 * Math.atan2(y, x) / Math.PI;
+            return v;
         }
     }
 
@@ -342,17 +389,22 @@ public class DokiPicture extends Activity {
         Log.i(TAG, "bullon atmeno vonalak keresese");
         ArrayList<MLine> bullLines = findBullLines(allLines, pointBull, matOriginalCopy);
         bullLines.size();
-        saveImageToDisk(matOriginalCopy, "step7-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
+        saveImageToDisk(matOriginalCopy, "step7-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+
+        findPerspective(matOriginalPhoto, pointBull, bullLines);
 
 // -------------------------------------------------
-        Log.i(TAG, "Harris");
-        Mat harrisResult = Mat.zeros(matOriginalPhoto.size(), CvType.CV_8UC3);
-        doHarrisProc(matOriginalPhoto, harrisResult);
-        saveImageToDisk(harrisResult, "step8-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB,8);
+        boolean doHarris = false;
+        if (doHarris) {
+            Log.i(TAG, "Harris");
+            Mat harrisResult = Mat.zeros(matOriginalPhoto.size(), CvType.CV_8UC3);
+            doHarrisProc(matOriginalPhoto, harrisResult);
+            saveImageToDisk(harrisResult, "step8-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
 // -------------------------------------------------
-        // végig megyünk a bull-ba menő vonalakonés megnézzük, hogy a harris kimeneten hol vannak leágazásaok
-        findXing(bullLines, harrisResult);
-        saveImageToDisk(harrisResult, "step9-harris-es-bull-lines", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+            // végig megyünk a bull-ba menő vonalakonés megnézzük, hogy a harris kimeneten hol vannak leágazásaok
+            findXing(bullLines, harrisResult);
+            saveImageToDisk(harrisResult, "step9-harris-es-bull-lines", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+        }
 
 // -------------------------------------------------
         int h = mImageView.getHeight();
@@ -386,6 +438,119 @@ public class DokiPicture extends Activity {
         Log.i(TAG, ">>>> setPic end");
         mImageView.setImageBitmap(bitmap);
     }
+
+   private void findPerspective(Mat img, Point bull, ArrayList<MLine> bullLines) {
+        // kivágjuk a minxy és maxxy közötti részt, csak azon próbálkozunk, hogy gyorsabb legyen
+        Log.i(TAG, "Submat: " + minx + " " + maxx + " y: " + miny + " " + maxy);
+        Mat subMat = img.submat((int)miny, (int)maxy, (int)minx, (int)maxx);
+        saveImageToDisk(subMat, "step-10-01", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+        Log.i(TAG, "Bull: " + bull.x + ",'" + bull.y + " Bull lines: ");
+        int i = 0;
+        // kiszedjük az azonos vonalakat, ahol 2 foknál kisebb a különbség
+        HashMap<Double, MLine> lines = new HashMap<Double, MLine>();
+        for(MLine l : bullLines) {
+            Log.i(TAG, "i: " + i + " start: " + l.start.x + "," + l.end.y + " -> " + l.end.x + "," + l.end.y + " angle: " + l.getAngeInDegree() + " length: " + l.length());
+            i++;
+            boolean inTheSet = false;
+            for(Double d: lines.keySet()) {
+                if (Math.abs(l.getAngeInDegree() - d) < 2 || Math.abs(l.getAngeInDegree() - d) > 178) {
+                    inTheSet = true;
+                    // ha ez hosszabb, akkor a rovidebbet kidobjuk
+                    if (((MLine)lines.get(d)).length() < l.length()) {
+                        lines.put(d, l);
+                        Log.i(TAG, "This is longer, replace the previous");
+                    }
+                }
+            }
+            if (!inTheSet) {
+                lines.put(l.getAngeInDegree(), l);
+                Log.i(TAG, "First with this degree");
+            }
+        }
+       // megkeressük a legkisebb szöget bezárót, reménykedünk benne, hogy ők egymás mellett levő vonalak
+       MLine a = null, b = null;
+       double minDegree = 400;
+       Set<Double> skeys = lines.keySet();
+       Double[] keys = skeys.toArray(new Double[skeys.size()]);
+       for(int n = 0; n < keys.length - 1; n++ ) {
+           for(int m = n+1; m < keys.length; m++ ) {
+               if (Math.abs(keys[n] - keys[m]) < minDegree) {
+                   // TODO: itt nem nezzük, hogy ha 180-hoz közeli a különbségük...
+                   minDegree = Math.abs(keys[n] - keys[m]);
+                   a = lines.get(keys[n]);
+                   b = lines.get(keys[m]);
+                   Log.i(TAG, "a: " + a.start + " b" + b.start);
+               }
+           }
+       }
+       if (a == null) {
+           return;
+       }
+       Scalar colorA = new Scalar(255, 0, 0);
+       Scalar colorB = new Scalar(0, 0, 255);
+       Core.line(img, a.start, a.end, colorA);
+       Core.line(img, b.start, b.end, colorB);
+       Core.line(img, new Point(bull.x-5, bull.y), new Point(bull.x+5, bull.y), new Scalar(255, 0, 255), 1);
+       Core.line(img, new Point(bull.x, bull.y-5), new Point(bull.x, bull.y+5), new Scalar(255, 0, 255), 1);
+       subMat = img.submat((int)(miny*0.8), (int)(maxy*1.2), (int)(minx*0.8), (int)(maxx*1.2));
+       //saveImageToDisk(subMat, "step-10-02", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+
+       // kijelölünk 4 pontot. a két szakasz kezdő pontja illetve ezek tükrözve a bull-ra
+       Point a1 = a.start;
+       Point b1 = b.start;
+       Point a2 = a.mirrorPoint(a.start, bull);
+       Point b2 = b.mirrorPoint(b.start, bull);
+       Core.circle(img, a1, 5, colorA);
+       Core.circle(img, a2, 5, colorA);
+       Core.circle(img, b1, 5, colorB);
+       Core.circle(img, b2, 5, colorB);
+
+
+       // hova transzformáljuk ezt a 4 pontot?
+       // a1-ről feltételezem, hogy jó helyen van
+       double radius = a.distanceOfTwoPoints(bull, a1);
+       double degree = a.getTwoPointAngle(bull, a1);
+       Log.i(TAG, " a vonal eredeti szoget: " + a.getAngeInDegree() + " bullbol szamitott: " + degree);
+       Point ta1 = a.rotatePoint(bull, degree, radius);
+       Point tb1 = a.rotatePoint(bull, degree + 18, radius);
+       Point ta2 = a.rotatePoint(bull, degree + 180, radius);
+       Point tb2 = a.rotatePoint(bull, degree + 180 + 18, radius);
+       Core.circle(img, ta1, 5, new Scalar(255,0,255)); // purple (bull szine)
+       Core.circle(img, tb1, 5, new Scalar(255,255,0)); // sarga
+       Core.circle(img, ta2, 5, new Scalar(0,255,255)); // vilagos keke
+       Core.circle(img, tb2, 5, new Scalar(255,255,255)); // feher
+
+       Core.line(img, a1, ta1, new Scalar(255,255,255));
+       Core.line(img, a2, ta2, new Scalar(255,255,255));
+       Core.line(img, b1, tb1, new Scalar(255,255,255));
+       Core.line(img, b2, tb2, new Scalar(255,255,255));
+
+       subMat = img.submat((int)(miny*0.8), (int)(maxy*1.2), (int)(minx*0.8), (int)(maxx*1.2));
+       saveImageToDisk(subMat, "step-10-03", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+
+       List<Point> src_pnt = new ArrayList<Point>();
+       src_pnt.add(a1);
+       src_pnt.add(a2);
+       src_pnt.add(b1);
+       src_pnt.add(b2);
+       Mat startM = Converters.vector_Point2f_to_Mat(src_pnt);
+
+       List<Point> dst_pnt = new ArrayList<Point>();
+       dst_pnt.add(ta1);
+       dst_pnt.add(ta2);
+       dst_pnt.add(tb1);
+       dst_pnt.add(tb2);
+       Mat endM = Converters.vector_Point2f_to_Mat(dst_pnt);
+
+       Mat perspectiveTransform = Imgproc.getPerspectiveTransform(startM, endM);
+
+       Mat out = img.clone();
+       Imgproc.warpPerspective(img, out, perspectiveTransform, img.size(), Imgproc.INTER_CUBIC); // Imgproc.INTER_LINEAR + Imgproc.CV_WARP_FILL_OUTLIERS
+       //saveImageToDisk(img, "step-10-04-0", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+       saveImageToDisk(out, "step-10-04", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+       //saveImageToDisk(out, "step-10-04.jpg", "doki", this, -1, 10);
+
+   }
 
     private void findXing(ArrayList<MLine> bullLines, Mat harrisResult) {
         for(MLine l:bullLines) {
@@ -488,12 +653,12 @@ public class DokiPicture extends Activity {
                 // TODO: esetleg itt a clusterRadius-szal osszefuggesben kereshenenk a pontokat.
                 if (distance < 3) {
                     // ha az egyenes kozel van, attol meg maga a szakasz lehet tavol
-                    if (true || l.endDistance(pointBull) < 10) {
-                        double angle = l.getAngeInDegree();
+                    if (l.endDistanceOrDistance(pointBull) < 10) {
+                        //double angle = l.getAngeInDegree();
                         //Log.i(TAG, "Angle: " + angle + " degree: " + (angle * (180 / Math.PI)));
-                        if (firstAngle == Double.MIN_VALUE) {
-                            firstAngle = angle;
-                        }
+//                        if (firstAngle == Double.MIN_VALUE) {
+//                            firstAngle = angle;
+//                        }
                         Core.line(matOriginalCopy, l.start, l.end, new Scalar(0, 0, 255), 1);
                         updateMinMax(l.start);
                         updateMinMax(l.end);
