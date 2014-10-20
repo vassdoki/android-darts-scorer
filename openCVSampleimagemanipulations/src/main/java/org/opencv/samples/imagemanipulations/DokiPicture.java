@@ -54,7 +54,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 99;
+    private int saveStepsToImage = 9;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -70,7 +70,8 @@ public class DokiPicture extends Activity {
     private int paramHLlineGap = 20;
 
     private ArrayList<MLine> allLines;
-//    private ArrayList<MLine> goodLines;
+    private float[] harrisResultVals;
+    //    private ArrayList<MLine> goodLines;
 //    private Point pointBull;
 
     class MLine {
@@ -88,11 +89,14 @@ public class DokiPicture extends Activity {
             start.y = y1;
             end.x = x2;
             end.y = y2;
-            angle = ((y2 - y1) / (double) (x2 - x1));
+            angle = (end.y - start.y) / (end.x - start.x);
             intersect = y1 - angle * x1;
             important = false;
         }
 
+        public double getPerpAngle() {
+            return (start.x - end.x) / (start.y - end.y);
+        }
         public double distance(Point b) {
             return Math.abs((end.x - start.x) * (start.y - b.y) - (start.x - b.x) * (end.y - start.y)) /
                     Math.sqrt(sq(end.x - start.x) + sq(end.y - start.y));
@@ -104,12 +108,17 @@ public class DokiPicture extends Activity {
 
         /**
          * The closest distance from the start and the end of the line.
+         * If the point is in between, then the distance from the line.
          * @param b
          * @return
          */
         public double endDistance(Point b) {
-            return Math.min(Math.sqrt(sq(b.x - start.x) + sq(b.y - start.y)),
-                Math.sqrt(sq(b.x - end.x) + sq(b.y - end.y)));
+            if (start.x < b.x && b.x < end.x && start.y < b.y && b.y < end.y) {
+                return distance(b);
+            }
+            double dstFromStart = Math.sqrt(sq(b.x - start.x) + sq(b.y - start.y));
+            double dstFromEnd = Math.sqrt(sq(b.x - end.x) + sq(b.y - end.y));
+            return Math.min(dstFromStart, dstFromEnd);
 
 
         }
@@ -124,8 +133,30 @@ public class DokiPicture extends Activity {
             if (v < -180) {
                 v = -180;
             }
+            if (v < 0) {
+                v += 180;
+            }
             //Log.i(TAG, "arch: y: " + y + " x: " + x + " archtan: " + v);
             return v;
+        }
+
+        public Point getStep() {
+            Point step = new Point();
+            if (Math.abs(start.x - end.x) > Math.abs(start.y-end.y)) {
+                step.x = Math.signum(end.x - start.x);
+                step.y = angle;
+            } else {
+                step.y = Math.signum(end.y - start.y);
+                step.x = step.y * getPerpAngle();
+            }
+            return step;
+        }
+        public int getStepLength() {
+            if (Math.abs(start.x - end.x) > Math.abs(start.y-end.y)) {
+                return (int)Math.abs(start.x-end.x);
+            } else {
+                return (int)Math.abs(start.y - end.y);
+            }
         }
     }
 
@@ -269,7 +300,7 @@ public class DokiPicture extends Activity {
         mImageViewH = mImageView.getHeight();
         Mat matOriginalPhoto = getOriginalPhotoMat();
         Log.i(TAG, "Photo loaded");
-        saveImageToDisk(matOriginalPhoto, "step0-orig", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        //saveImageToDisk(matOriginalPhoto, "step0-orig", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         Mat matCanny = new Mat();
         Imgproc.Canny(matOriginalPhoto, matCanny, paramCanny1, paramCanny2);
@@ -287,37 +318,43 @@ public class DokiPicture extends Activity {
         Log.i(TAG, "HoughLinesP processed");
 
         Imgproc.cvtColor(matCanny, matCanny, Imgproc.COLOR_GRAY2BGRA, 4);
-        saveImageToDisk(matCanny, "step1-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
-        //matCanny.release();
+        //saveImageToDisk(matCanny, "step1-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        matCanny.release();
 
+// -------------------------------------------------
         // osszes vonal sargaval, es fontosak meghatarozasa
         Log.i(TAG, "HL vonalak rajzolasa");
         Mat matOriginalCopy = matOriginalPhoto.clone();
         ArrayList<MLine> goodLines = findGoodLines(matLines, matOriginalCopy);
-        saveImageToDisk(matOriginalCopy, "step2-vonalak", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        saveImageToDisk(matOriginalCopy, "step2-vonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 2);
         //matLines.release();
 
-        // --------------------------------------------------------------------
+// --------------------------------------------------------------------
         // a fontos vonalak metszespontjait szamoljuk
         Log.i(TAG, "HL fonos vonalak metszespontja");
         Point pointBull = findBullFromGoodLines(goodLines, matOriginalCopy);
-        saveImageToDisk(matOriginalCopy, "step3-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 3);
+        saveImageToDisk(matOriginalCopy, "step3-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
 
-        // --------------------------------------------------------------------
+// --------------------------------------------------------------------
         // vegig megyunk az osszes vonalon, es a bullon atmenoket megkeressuk
         // eltaroljuk az igy talalt egyeneseket
         // es a minxy es maxy pontokat, abban van a tabla
         Log.i(TAG, "bullon atmeno vonalak keresese");
         ArrayList<MLine> bullLines = findBullLines(allLines, pointBull, matOriginalCopy);
         bullLines.size();
-        saveImageToDisk(matOriginalCopy, "step4-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
+        saveImageToDisk(matOriginalCopy, "step7-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
 
 // -------------------------------------------------
         Log.i(TAG, "Harris");
-        doHarrisProc(matOriginalPhoto, matCanny);
-        saveImageToDisk(matCanny, "step7-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB,7);
+        Mat harrisResult = Mat.zeros(matOriginalPhoto.size(), CvType.CV_8UC3);
+        doHarrisProc(matOriginalPhoto, harrisResult);
+        saveImageToDisk(harrisResult, "step8-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB,8);
 // -------------------------------------------------
+        // végig megyünk a bull-ba menő vonalakonés megnézzük, hogy a harris kimeneten hol vannak leágazásaok
+        findXing(bullLines, harrisResult);
+        saveImageToDisk(harrisResult, "step9-harris-es-bull-lines", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
 
+// -------------------------------------------------
         int h = mImageView.getHeight();
         int w = mImageView.getWidth();
 
@@ -350,6 +387,29 @@ public class DokiPicture extends Activity {
         mImageView.setImageBitmap(bitmap);
     }
 
+    private void findXing(ArrayList<MLine> bullLines, Mat harrisResult) {
+        for(MLine l:bullLines) {
+            // végig megyünk a vonal pontjain
+            Point currP = l.start;
+            Point step = l.getStep();
+            int stepLength = l.getStepLength();
+            int i = 0;
+            // kiszamoljuk a meroleges iranyt
+            double perpAngle = l.getPerpAngle();
+            Scalar color = new Scalar(255, 255, 0);
+            if (step.x == 1) {
+                color = new Scalar(255, 255, 255);
+            }
+            while(i < stepLength) {
+                currP.x += step.x;
+                currP.y += step.y;
+                i++;
+                Core.line(harrisResult, currP, currP, color);
+            }
+        }
+    }
+
+
     private void doHarrisProc(Mat matOriginalPhoto, Mat matResult) {
         Mat src_gray = new Mat();
         Imgproc.cvtColor(matOriginalPhoto, src_gray, Imgproc.COLOR_RGBA2GRAY);
@@ -371,11 +431,11 @@ public class DokiPicture extends Activity {
         int dstChannels = dst.channels();
         int pixelNum = (int)dst.total() * dstChannels;
         int type = dst.type();
-        float[] dstPixels = new float[pixelNum];
-        dst.get(0,0,dstPixels);
+        harrisResultVals = new float[pixelNum];
+        dst.get(0,0, harrisResultVals);
         for (int j = 0; j < pixelNum; j+=dstChannels) {
-                minH = Math.min(dstPixels[j], minH);
-                maxH = Math.max(dstPixels[j], maxH);
+                minH = Math.min(harrisResultVals[j], minH);
+                maxH = Math.max(harrisResultVals[j], maxH);
         }
 
         Log.i(TAG, "XXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + ":min:" + minH + ":max:" + maxH);
@@ -390,7 +450,7 @@ public class DokiPicture extends Activity {
         for (int di = 0; di < pixelNum; di+=dstChannels) {
             i = di % cols;
             j = di / cols;
-            val = dstPixels[di];
+            val = harrisResultVals[di];
             if (Math.abs(val) > 0.0001) {
                 if (val < 0) {
                     v0 = 127 + 128 * val / minH;
@@ -425,44 +485,42 @@ public class DokiPicture extends Activity {
         if (pointBull != null) {
             for(MLine l: allLines) {
                 double distance = l.distance(pointBull);
-                if (distance < 10) {
+                // TODO: esetleg itt a clusterRadius-szal osszefuggesben kereshenenk a pontokat.
+                if (distance < 3) {
                     // ha az egyenes kozel van, attol meg maga a szakasz lehet tavol
-                    if (l.endDistance(pointBull) < 50) {
+                    if (true || l.endDistance(pointBull) < 10) {
                         double angle = l.getAngeInDegree();
                         //Log.i(TAG, "Angle: " + angle + " degree: " + (angle * (180 / Math.PI)));
                         if (firstAngle == Double.MIN_VALUE) {
                             firstAngle = angle;
                         }
-                        Core.line(matOriginalCopy, l.start, l.end, new Scalar(0, 0, 255), 4);
+                        Core.line(matOriginalCopy, l.start, l.end, new Scalar(0, 0, 255), 1);
                         updateMinMax(l.start);
                         updateMinMax(l.end);
                         bullLines.add(l);
                     } else {
                         // az iranya jo, de a vege tul tavol van
-                        Core.line(matOriginalCopy, l.start, l.end, new Scalar(36, 171, 52), 4);
+                        Core.line(matOriginalCopy, l.start, l.end, new Scalar(36, 171, 52), 1);
                     }
                 } else {
                     // az iranya sem jo
-                    //Core.line(matOriginalCopy, l.start, l.end, new Scalar(240, 38, 255), 4);
+                    //Core.line(matOriginalCopy, l.start, l.end, new Scalar(240, 38, 255), 1);
                 }
             }
-            Core.line(matOriginalCopy, new Point(minx, miny), new Point(minx, maxy), new Scalar(0, 0, 255), 4);
-            Core.line(matOriginalCopy, new Point(maxx, miny), new Point(maxx, maxy), new Scalar(0, 0, 255), 4);
-            Core.line(matOriginalCopy, new Point(minx, miny), new Point(maxx, miny), new Scalar(0, 0, 255), 4);
-            Core.line(matOriginalCopy, new Point(minx, maxy), new Point(maxx, maxy), new Scalar(0, 0, 255), 4);
+            Core.line(matOriginalCopy, new Point(minx, miny), new Point(minx, maxy), new Scalar(0, 0, 255), 1);
+            Core.line(matOriginalCopy, new Point(maxx, miny), new Point(maxx, maxy), new Scalar(0, 0, 255), 1);
+            Core.line(matOriginalCopy, new Point(minx, miny), new Point(maxx, miny), new Scalar(0, 0, 255), 1);
+            Core.line(matOriginalCopy, new Point(minx, maxy), new Point(maxx, maxy), new Scalar(0, 0, 255), 1);
         }
 
-        if (pointBull != null) {
-            Core.circle(matOriginalCopy, pointBull, 50, new Scalar(255, 0, 255), 7);
-        }
         return bullLines;
     }
 
     private Point findBullFromGoodLines(ArrayList<MLine> goodLines, Mat matOriginalCopy) {
-        HashMap<Point, Integer> goodLinesXing = new HashMap<Point, Integer>();
+        HashMap<String, Integer> goodLinesXing = new HashMap<String, Integer>();
         for (int i = 0; i < goodLines.size(); i++) {
             MLine l1 = goodLines.get(i);
-            Core.line(matOriginalCopy, l1.start, l1.end, new Scalar(255, 0, 0), 2);
+            Core.line(matOriginalCopy, l1.start, l1.end, new Scalar(255, 0, 0), 1);
 
 
             for (int j = i + 1; j < goodLines.size(); j++) {
@@ -471,45 +529,71 @@ public class DokiPicture extends Activity {
                 double x = (l2.intersect - l1.intersect) / (l1.angle - l2.angle);
                 double y = l1.angle * x + l1.intersect;
                 Point p = new Point(x, y);
-                if (p.x > 0 && p.x < photoW & p.y > 0 && p.y < photoH) {
-                    boolean megvan = false;
-                    for (Map.Entry<Point, Integer> entry : goodLinesXing.entrySet()) {
-                        Point key = entry.getKey();
-                        Integer value = entry.getValue();
-                        if (Math.abs(key.x - x) < 50 && Math.abs(key.y - y) < 50) {
-                            goodLinesXing.put(key, new Integer(value + 1));
-                            megvan = true;
-                            //Log.d(TAG, "Metszespont megvan: " + p.x + "," + p.y + " szam: " + (value + 1));
-                        }
-                    }
-                    if (!megvan) {
-                        //Log.d(TAG, "Metszespont uj: " + p.x + "," + p.y);
-                        goodLinesXing.put(p, 1);
-                    }
-                } else {
-                    //Log.d(TAG, "Metszespont nincs a kepen: " + p.x + "," + p.y);
+                String key = "" + (int)x + "," + (int)y;
+                Integer value = new Integer(1);
+                if (goodLinesXing.containsKey(key)) {
+                    value = new Integer(goodLinesXing.get(key) + 1);
                 }
-                //Core.line(rgbaInnerWindow, p, new Point(vec1[0], vec1[1]), new Scalar(0, 255, 0), 1);
-                //Core.line(rgbaInnerWindow, p, new Point(vec2[0], vec2[1]), new Scalar(0, 255, 0), 1);
+                goodLinesXing.put(key, value);
+                Core.line(matOriginalCopy, p, p, new Scalar(255, 0, 255), ((int)value /10)+1);
             }
         }
 
         // --------------------------------------------------------------------
         // megkeressuk a legnagyobb metszespontot
-        Log.i(TAG, "legnagyobb metszespont keresese");
-        int max = 0;
+
+        // Ha nincs olyan pont, ahol egynel tobb lenne, ezert kicsit klaszterezni kell oket
+        // a szomszedos n ponttan osszevonjuk oket
         Point maxPoint = null;
-        //Log.d(TAG, "Metszespont eredmeny: =============================================================");
-        for (Map.Entry<Point, Integer> entry : goodLinesXing.entrySet()) {
-            Point key = entry.getKey();
-            Integer value = entry.getValue();
-            //Log.d(TAG, "M;" + key.x + ";" + key.y + ";darab;" + value);
-            if (value > max) {
-                maxPoint = key;
-                max = value;
+        int max = 0;
+        for(int clasterRadius = 2; clasterRadius < 1000 && max < 2; clasterRadius+=5) {
+            Log.d(TAG, "Metszespont eredmeny: =============================================================");
+            for (Map.Entry<String, Integer> entry : goodLinesXing.entrySet()) {
+                String key = entry.getKey();
+                Integer value = entry.getValue();
+                //Log.d(TAG, "M;" + key + ";darab;" + value);
+                if (value > max) {
+                    String[] x = key.split(",");
+                    maxPoint = new Point(Double.parseDouble(x[0]), Double.parseDouble(x[1]));
+                    max = value;
+                }
+            }
+            Log.d(TAG, "Metszespont sulya(max): " + max + " clasterRadius: " + clasterRadius);
+            if (max == 1) {
+                HashMap<String, Integer> newGoodLinesXing = new HashMap<String, Integer>();
+                for (Map.Entry<String, Integer> entry : goodLinesXing.entrySet()) {
+                    // TODO: ez nincs tesztelve!!!
+                    String key = entry.getKey();
+                    int value = entry.getValue();
+                    if (value != 0) {
+                        String[] k = key.split(",");
+                        int x, y;
+                        x = Integer.parseInt(k[0]);
+                        y = Integer.parseInt(k[1]);
+                        for (int i = -1 * clasterRadius; i <= clasterRadius; i++) {
+                            for (int j = -1 * clasterRadius; j <= clasterRadius; j++) {
+                                if (i == 0 && j == 0) continue;
+                                String key2 = "" + (x + i) + "," + (y + j);
+                                if (goodLinesXing.containsKey(key2)) {
+                                    value += newGoodLinesXing.get(key2);
+                                    goodLinesXing.put(key2, Integer.valueOf(0));
+                                }
+                            }
+                        }
+                        newGoodLinesXing.put(key, Integer.valueOf(value));
+                    }
+                }
+                goodLinesXing = (HashMap<String, Integer>) newGoodLinesXing.clone();
             }
         }
+
         if (maxPoint != null) {
+            if (maxPoint != null) {
+                //Core.circle(matOriginalCopy, pointBull, 50, new Scalar(255, 0, 255), 7);
+                Core.line(matOriginalCopy, new Point(maxPoint.x-3, maxPoint.y), new Point(maxPoint.x+3, maxPoint.y), new Scalar(255, 0, 255), 2);
+                Core.line(matOriginalCopy, new Point(maxPoint.x, maxPoint.y-3), new Point(maxPoint.x, maxPoint.y+3), new Scalar(255, 0, 255), 2);
+            }
+
             return maxPoint;
         } else {
             return null;
@@ -531,7 +615,7 @@ public class DokiPicture extends Activity {
         for (int i = 0; i < linesArr.length; i+=linesChannels) {
             MLine mLine = new MLine(linesArr[i + 0], linesArr[i + 1], linesArr[i + 2], linesArr[i + 3]);
             allLines.add(mLine);
-            Core.line(matOriginalCopy, mLine.start, mLine.end, new Scalar(155, 155, 0), 4);
+            Core.line(matOriginalCopy, mLine.start, mLine.end, new Scalar(155, 155, 0), 1);
 
             isGood = true;
 
@@ -539,7 +623,7 @@ public class DokiPicture extends Activity {
             for(MLine l: goodLines) {
                 //if (Math.abs(l.angle - mLine.angle) < 0.5) {
                 //Log.i(TAG, "l degree: " + l.getAngeInDegree() + " mLine degree: " + mLine.getAngeInDegree() + " diff: " + Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()));
-                if (Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) < 3 || Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) > 180 - 3) {
+                if (Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) < 1 || Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) > 180 - 1) {
                     isGood = false;
                 }
             }
