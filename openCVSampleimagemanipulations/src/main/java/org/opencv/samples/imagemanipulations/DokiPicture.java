@@ -35,6 +35,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -166,7 +168,7 @@ public class DokiPicture extends Activity {
                 v = -180;
             }
             if (v < 0) {
-                v += 180;
+                v += 360;
             }
             //Log.i(TAG, "arch: y: " + y + " x: " + x + " archtan: " + v);
             return v;
@@ -174,13 +176,14 @@ public class DokiPicture extends Activity {
 
         public Point getStep() {
             Point step = new Point();
+            double length;
             if (Math.abs(start.x - end.x) > Math.abs(start.y-end.y)) {
-                step.x = Math.signum(end.x - start.x);
-                step.y = angle;
+                length = Math.abs(start.x - end.x);
             } else {
-                step.y = Math.signum(end.y - start.y);
-                step.x = step.y * getPerpAngle();
+                length = Math.abs(start.y - end.y);
             }
+            step.x = (end.x - start.x) / length;
+            step.y = (end.y - start.y) / length;
             return step;
         }
         public int getStepLength() {
@@ -205,9 +208,9 @@ public class DokiPicture extends Activity {
             Point p = new Point();
             double sin = Math.sin(Math.PI * degree / 180);
             p.x = c.x + sin * radius;
-            //Log.i(TAG, "rotatePoint, bull: " + c.x +","+ c.y + " radius: " + radius + " degree: " + degree + " sin: " + sin);
             double cos = Math.cos(Math.PI * degree / 180);
             p.y = c.y + cos * radius;
+            //Log.i(TAG, "rotatePoint, bull;" + c.x +";"+ c.y + ";radius;" + radius + ";degree;" + degree + ";sin;" + sin + ";cos;" + cos + ";p;" + p.x +";"+p.y);
             return p;
         }
 
@@ -381,7 +384,7 @@ public class DokiPicture extends Activity {
         //saveImageToDisk(matCanny, "step1-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
         //matCannyRgba.release();
 
-// -------------------------------------------------
+//  -------------------------------------------------
         // osszes vonal sargaval, es fontosak meghatarozasa
         Log.i(TAG, "HL vonalak rajzolasa");
         Mat matOriginalCopy = matOriginalPhoto.clone();
@@ -389,13 +392,13 @@ public class DokiPicture extends Activity {
         saveImageToDisk(matOriginalCopy, "step2-vonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 2);
         //matLines.release();
 
-// --------------------------------------------------------------------
+//  --------------------------------------------------------------------
         // a fontos vonalak metszespontjait szamoljuk
         Log.i(TAG, "HL fonos vonalak metszespontja");
         Point pointBull = findBullFromGoodLines(goodLines, matOriginalCopy);
         saveImageToDisk(matOriginalCopy, "step3-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
 
-// --------------------------------------------------------------------
+//  --------------------------------------------------------------------
         // vegig megyunk az osszes vonalon, es a bullon atmenoket megkeressuk
         // eltaroljuk az igy talalt egyeneseket
         // es a minxy es maxy pontokat, abban van a tabla
@@ -407,20 +410,20 @@ public class DokiPicture extends Activity {
         findCircle(pointBull, bullLines, matCannyGray, matCannyRgba);
         //findPerspective(matOriginalPhoto, pointBull, bullLines);
 
-// -------------------------------------------------
+//  -------------------------------------------------
         boolean doHarris = false;
         if (doHarris) {
             Log.i(TAG, "Harris");
             Mat harrisResult = Mat.zeros(matOriginalPhoto.size(), CvType.CV_8UC3);
             doHarrisProc(matOriginalPhoto, harrisResult);
             saveImageToDisk(harrisResult, "step8-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
-// -------------------------------------------------
+//  -------------------------------------------------
             // végig megyünk a bull-ba menő vonalakonés megnézzük, hogy a harris kimeneten hol vannak leágazásaok
             findXing(bullLines, harrisResult);
             saveImageToDisk(harrisResult, "step9-harris-es-bull-lines", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
         }
 
-// -------------------------------------------------
+//  -------------------------------------------------
         int h = mImageView.getHeight();
         int w = mImageView.getWidth();
 
@@ -466,6 +469,7 @@ public class DokiPicture extends Activity {
             }
         }
         assert(maxLength > -1);
+        maxLength *= 1.2;
 
         int dstChannels = matCannyGray.channels();
         int pixelNum = (int)matCannyGray.total() * dstChannels;
@@ -480,34 +484,149 @@ public class DokiPicture extends Activity {
         double degreeStep = 0.5;
         MLine l = new MLine();
         ArrayList<ArrayList<Double>> points = new ArrayList<ArrayList<Double>>();
+        ArrayList<double[]> pointNumbers = new ArrayList<double[]>();
         for(double i = 0; i < 360; i+= degreeStep) {
             ArrayList<Double> currPoints = new ArrayList<Double>();
-            currPoints.add(Double.valueOf((double)i));
+            currPoints.add(Double.valueOf((double) i));
             p = maxLine.rotatePoint(bull, i, maxLength);
             //Core.circle(matCannyRgba, p, 3, lightBlue);
             //Core.line(matCannyRgba, bull, p, lightBlue);
             l.reset(bull, p);
             currPoints.addAll(deteckPointsOnLine(cannyVals, matCannyRgba, l));
             points.add(currPoints);
-            debugPoints(currPoints, maxLength);
+            double[] pn = new double[2];
+            pn[0] = i;
+            pn[1] = sumPoints(currPoints, maxLength);
+            pointNumbers.add(pn);
         }
         Core.line(matCannyRgba, new Point(bull.x-5, bull.y), new Point(bull.x+5, bull.y), new Scalar(255, 0, 255), 1);
         Core.line(matCannyRgba, new Point(bull.x, bull.y-5), new Point(bull.x, bull.y+5), new Scalar(255, 0, 255), 1);
-        saveImageToDisk(matCannyRgba, "step-11", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
+        //saveImageToDisk(matCannyRgba, "step-11", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
+
+        ArrayList<double[]> linesFromBull = findLocaleMaximas(pointNumbers);
+        Scalar c = new Scalar(0, 255, 255);
+        for(double[] d: linesFromBull) {
+            p = maxLine.rotatePoint(bull, d[0], maxLength);
+            Core.line(matCannyRgba, bull, p, c);
+            Core.putText(matCannyRgba, ""+d[0], p, 1, 0.75, c);
+        }
+        saveImageToDisk(matCannyRgba, "step-11-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
+
+        // Megvannak a vonalak, végüg megyünk a vonalak közti területen, és egyenes összekötéseket keresünk
+        // köztük. Ha megvan, és az a legbelső, akkor pontosan tudjuk annak a pontnak a beforgatott koordinátáit.
     }
 
-    private void debugPoints(ArrayList<Double> p, double maxLength) {
-        StringBuffer sb = new StringBuffer();
+    private ArrayList<double[]> findLocaleMaximas(ArrayList<double[]> pointNumbers) {
+        // pointNumbers [szog, darab] -ban megkeressuk a lokalis maximumokat.
+        // 6 fokonként csináljuk a lokális maximumokat
+        // addig mindeképpen lépegetünk előre, amíg a következő nagyobb, mint az aktuális.
+        // lefele maximum 3 fokot haladunk (3 fokon át kisebbet olvastunk, mint a megtalált maximum)
+        ArrayList<double[]> result = new ArrayList<double[]>();
+        Log.i(TAG, "Lokalis maximum kereses kezdo ertek: ");
+        debugArrayDouble(pointNumbers);
+        double localeWidth = 3; // A keresési intervellum fele
+        double degree;
+        double value;
+        double prevValue = 0;
+        double maxValue = 0;
+        double maxValueDegree = 0;
+        boolean isFirst = true;
+        for(double[] d: pointNumbers) {
+            degree = d[0];
+            value = d[1];
+            if (isFirst) {
+                maxValue = value;
+                maxValueDegree = degree;
+                isFirst = false;
+                continue;
+            }
+            if (value >= maxValue) {
+                // we go up, until we can
+                maxValue = value;
+                maxValueDegree = degree;
+            } else {
+                if (prevValue >= value) {
+                    // we go down until we can
+                } else {
+                    if (degree - maxValueDegree > localeWidth) {
+                        // we have find a locale maximum
+                        double[] res = new double[2];
+                        res[0] = maxValueDegree;
+                        res[1] = maxValue;
+                        result.add(res);
+                        maxValue = value;
+                        maxValueDegree = degree;
+                    }
+                }
+            }
+            prevValue = value;
+        }
+        Log.i(TAG, "Elso cilkus utan eredmeny: ");
+        debugArrayDouble(result);
+
+        // rendezzuk csokkeno sorrendben
+        Collections.sort(result, new Comparator<double[]>() {
+            public int compare(double[] d1, double[] d2) {
+                return -1 * Double.compare(d1[1], d2[1]);
+            }
+        });
+        Log.i(TAG, "Rendezve: ");
+        debugArrayDouble(result);
+
+        // kivesszuk a 20 felettieket
+        for(int i = result.size()-1; i > 19; i--) {
+            result.remove(i);
+        }
+
+        // ujra rendezzuk szog szerint
+        Collections.sort(result, new Comparator<double[]>() {
+            public int compare(double[] d1, double[] d2) {
+                return Double.compare(d1[0], d2[0]);
+            }
+        });
+        Log.i(TAG, "A keresett szogek: ");
+        debugArrayDouble(result);
+
+        return result;
+    }
+
+    private void debugArrayDouble(ArrayList<double[]> a) {
+        StringBuffer sb1 = new StringBuffer("yyy1;");
+        StringBuffer sb2 = new StringBuffer("yyy2;");
+        for(double[] x : a) {
+            sb1.append(x[0] + ";");
+            sb2.append(x[1] + ";");
+        }
+        Log.i(TAG, sb1.toString());
+        Log.i(TAG, sb2.toString());
+    }
+
+
+    private double sumPoints(ArrayList<Double> p, double maxLength) {
+        StringBuilder sb = new StringBuilder();
         int x = 1;
-        int[] vals = new int[(int)(maxLength) + 10];
+        int[] vals = new int[(int)(maxLength * 2)];
+        double sum = 0;
+        boolean skipForst = true;
         for(double d: p) {
+            if (skipForst) {
+                skipForst=false;
+                continue;
+            }
+            // TODO: nem nézzük az értéket, csak 0 vagy 1-et használunk. Meg kell nézni, hogy az érték többet mond-e
+            sum ++;
             vals[(int)(d/x)]++;
         }
         sb.append("xxx;" + p.get(0).toString() + ";");
         for(int i: vals) {
-            sb.append(i + ";");
+            if (i==0) {
+                sb.append(";");
+            } else {
+                sb.append(i + ";");
+            }
         }
-        Log.i(TAG, sb.toString());
+        //Log.i(TAG, sb.toString());
+        return sum;
     }
 
     private ArrayList<Double> deteckPointsOnLine(byte[] cannyVals, Mat matCannyRgba, MLine l) {
@@ -522,10 +641,11 @@ public class DokiPicture extends Activity {
         Scalar colorLight = new Scalar(200, 50, 155);
         //sampleSize = 10;
         Point p = new Point();
-        while(i < stepLength) {
-            currP.x += step.x ;
-            currP.y += step.y ;
-            i++;
+        int stepSkip = 1;
+        while(i < stepLength/stepSkip) {
+            currP.x += step.x * stepSkip;
+            currP.y += step.y * stepSkip;
+            i+=stepSkip;
             float currValue = 0;
             for(int m = -1; m < 2; m++) {
                 for(int n = -1; n < 2; n++) {
@@ -560,7 +680,7 @@ public class DokiPicture extends Activity {
             i++;
             boolean inTheSet = false;
             for(Double d: lines.keySet()) {
-                if (Math.abs(l.getAngeInDegree() - d) < 2 || Math.abs(l.getAngeInDegree() - d) > 178) {
+                if (Math.abs(l.getAngeInDegree() - d) < 2 || Math.abs(l.getAngeInDegree() - d) > 360 - 2) {
                     inTheSet = true;
                     // ha ez hosszabb, akkor a rovidebbet kidobjuk
                     if (((MLine)lines.get(d)).length() < l.length()) {
@@ -895,7 +1015,7 @@ public class DokiPicture extends Activity {
             for(MLine l: goodLines) {
                 //if (Math.abs(l.angle - mLine.angle) < 0.5) {
                 //Log.i(TAG, "l degree: " + l.getAngeInDegree() + " mLine degree: " + mLine.getAngeInDegree() + " diff: " + Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()));
-                if (Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) < 1 || Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) > 180 - 1) {
+                if (Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) < 1 || Math.abs(l.getAngeInDegree() - mLine.getAngeInDegree()) > 360 - 1) {
                     isGood = false;
                 }
             }
