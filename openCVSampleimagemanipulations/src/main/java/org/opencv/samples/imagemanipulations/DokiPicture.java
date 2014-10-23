@@ -59,7 +59,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 11;
+    private int saveStepsToImage = 12;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -407,8 +407,11 @@ public class DokiPicture extends Activity {
         bullLines.size();
         saveImageToDisk(matOriginalCopy, "step7-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
 
-        findCircle(pointBull, bullLines, matCannyGray, matCannyRgba);
-        //findPerspective(matOriginalPhoto, pointBull, bullLines);
+        Point[] transRes = findCircle(pointBull, bullLines, matCannyGray, matCannyRgba);
+        Mat transfomed = doTransform(transRes, matOriginalPhoto);
+        saveImageToDisk(transfomed, "step-12-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
+        Mat transfomed2 = doTransform(transRes, matCannyRgba);
+        saveImageToDisk(transfomed2, "step-12-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
 
 //  -------------------------------------------------
         boolean doHarris = false;
@@ -456,20 +459,20 @@ public class DokiPicture extends Activity {
         mImageView.setImageBitmap(bitmap);
     }
 
-    private void findCircle(Point bull, ArrayList<MLine> bullLines, Mat matCannyGray, Mat matCannyRgba) {
+    private Point[] findCircle(Point bull, ArrayList<MLine> bullLines, Mat matCannyGray, Mat matCannyRgba) {
         // megkeressük a leghosszabb bull vonalat, ami nem megy át a bullon
-        double maxLength = -1;
+        double maxBullLineLengh = -1;
         MLine maxLine = null;
         for(MLine l : bullLines) {
             if (l.endDistance(bull) < 20) {
-                if (l.length() > maxLength) {
-                    maxLength = l.length();
+                if (l.length() > maxBullLineLengh) {
+                    maxBullLineLengh = l.length();
                     maxLine = l;
                 }
             }
         }
-        assert(maxLength > -1);
-        maxLength *= 1.2;
+        assert(maxBullLineLengh > -1);
+        double maxLength = maxBullLineLengh * 1.2;
 
         int dstChannels = matCannyGray.channels();
         int pixelNum = (int)matCannyGray.total() * dstChannels;
@@ -486,6 +489,8 @@ public class DokiPicture extends Activity {
         ArrayList<ArrayList<Double>> points = new ArrayList<ArrayList<Double>>();
         ArrayList<double[]> pointNumbers = new ArrayList<double[]>();
         for(double i = 0; i < 360; i+= degreeStep) {
+            // TODO: itt elég lenne egy viszonylag szűk sávban körbe menni. A bullhoz közeli és nagyon
+            // távoli rész inkább csak ront a pontosságon.
             ArrayList<Double> currPoints = new ArrayList<Double>();
             currPoints.add(Double.valueOf((double) i));
             p = maxLine.rotatePoint(bull, i, maxLength);
@@ -505,15 +510,160 @@ public class DokiPicture extends Activity {
 
         ArrayList<double[]> linesFromBull = findLocaleMaximas(pointNumbers);
         Scalar c = new Scalar(0, 255, 255);
-        for(double[] d: linesFromBull) {
+        double max1 = -1, max2 = -1;
+        int lineNum1 = -1, lineNum2 = -1;
+        double[] max1d = new double[2];
+        double[] max2d = new double[2];
+        double prevD = -1;
+        double d[];
+        //for(double[] d: linesFromBull) {
+        for(int i = 0; i < linesFromBull.size(); i++ ){
+            d = linesFromBull.get(i);
+            if (i == 0) {
+                prevD = 360 - linesFromBull.get(linesFromBull.size()-1)[0];
+            }
+            double diff = Math.abs(d[0] - prevD);
+            if (diff > max1) {
+                max2 = max1;
+                max2d[0] = max1d[0];
+                max2d[1] = max1d[1];
+                lineNum2 = lineNum1;
+                max1 = diff;
+                max1d[0] = prevD;
+                max1d[1] = d[0];
+                lineNum1 = i - 1;
+            }
             p = maxLine.rotatePoint(bull, d[0], maxLength);
             Core.line(matCannyRgba, bull, p, c);
             Core.putText(matCannyRgba, ""+d[0], p, 1, 0.75, c);
+            prevD = d[0];
         }
         saveImageToDisk(matCannyRgba, "step-11-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
 
-        // Megvannak a vonalak, végüg megyünk a vonalak közti területen, és egyenes összekötéseket keresünk
-        // köztük. Ha megvan, és az a legbelső, akkor pontosan tudjuk annak a pontnak a beforgatott koordinátáit.
+        // megkeressük a két legnagyobb szöget (max1, max2), ezek egymással szemben lesznek, és a köztük levő tripla
+        // sáv merőleges lesz a bull-ra (nagyon remélem mindig igaz ez)
+
+        // összeadjuk a pontokat a 2 szög között, de csak a bull-tól 1/3-nál messzebb levőket, mert közel túl zajos
+        // ezekben az összegekben az első lokális maximumot keressük, ott lesz a beső tripla
+        double distanceFromBull1 = findTripple(max1d[0], max1d[1], (int)(maxBullLineLengh * 0.33), (int)maxBullLineLengh, points);
+        double distanceFromBull2 = findTripple(max2d[0], max2d[1], (int)(maxBullLineLengh * 0.33), (int)maxBullLineLengh, points);
+        Point a1 = maxLine.rotatePoint(bull, max1d[0], distanceFromBull1);
+        Point a2 = maxLine.rotatePoint(bull, max1d[1], distanceFromBull1);
+        Point b1 = maxLine.rotatePoint(bull, max2d[0], distanceFromBull2);
+        Point b2 = maxLine.rotatePoint(bull, max2d[1], distanceFromBull2);
+        c = new Scalar(80, 250, 50);
+        Core.circle(matCannyRgba, a1, 5, c, 2);
+        Core.circle(matCannyRgba, a2, 5, c, 2);
+        Core.circle(matCannyRgba, b1, 5, c, 2);
+        Core.circle(matCannyRgba, b2, 5, c, 2);
+        saveImageToDisk(matCannyRgba, "step-11-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
+
+        // ezek a pontok a szemből nézett táblán itt vannak:
+        Point frontBull = new Point(photoW/2, photoH/2);
+        double radius = 0.4 * photoH / 2;
+        Point ta1 = maxLine.rotatePoint(frontBull, 9 + (lineNum1 +0) * 18, radius);
+        Point ta2 = maxLine.rotatePoint(frontBull, 9 + (lineNum1 +1) * 18, radius);
+        Point tb1 = maxLine.rotatePoint(frontBull, 9 + (lineNum2 +0) * 18, radius);
+        Point tb2 = maxLine.rotatePoint(frontBull, 9 + (lineNum2 +1) * 18, radius);
+
+        return new Point[]{a1, a2, b1, b2, ta1, ta2, tb1, tb2};
+    }
+
+    /**
+     * points első értéke a szög, ahol a pontok vannak .utána minden érték egy távolságot jelent, ahol van pont.
+     * @param d1
+     * @param d2
+     * @param minDist
+     * @param points
+     * @return
+     */
+    private int findTripple(double d1, double d2, int minDist, int maxDist, ArrayList<ArrayList<Double>> points) {
+        int size = maxDist - minDist;
+        int[] vals = new int[size];
+        int maxValue = 0;
+        for(ArrayList<Double> ps: points) {
+            if (isBetweenDegree(d1, d2, ps.get(0))) {
+                maxValue++;
+                int idx;
+                for(int i = 1; i < ps.size(); i++) {
+                    idx = Math.min(ps.get(i).intValue() - minDist, size - 1);
+                    if (idx < 0) continue;
+                    vals[idx]++;
+                }
+            }
+        }
+        Log.i(TAG, "d1: " + d1 + " d2: " + d2 + " minDist: " + minDist + " maxDist: " + maxDist);
+        debugIntArray(vals);
+        // a vals-ban van minDist-től maxDist-ig az oszlopok ban levő pixelek darabszáma.
+        // Ezekből keressük az első lokális maximumot
+        // minimum 60%-os értéketet keresünk, ami 20% alatti értékekkel van körülvéve
+        int pos = -1;
+        int posMax = -1;
+        int currPos = 0;
+        boolean foundFirst = false;
+        int filterMinValue = (int)(maxValue * 0.2);
+        int filterMaxValue = (int)(maxValue * 0.6);
+        Log.i(TAG, "filterMinValue: " + filterMinValue + " filterMaxValue: " + filterMaxValue);
+        for(int value: vals) {
+            if (!foundFirst && value > filterMinValue) {
+                continue;
+            } else {
+                foundFirst = true;
+            }
+            if (value > filterMaxValue && value > posMax) {
+                posMax = value;
+                pos = currPos;
+            }
+            if (pos > -1 && value < filterMinValue) {
+                // end of the locale intervall
+                break;
+            }
+            currPos++;
+        }
+        Log.i(TAG, "pos: " + pos +  " posMax: " + posMax);
+        if (pos > -1) {
+            return pos + minDist;
+        } else {
+            return -1;
+        }
+    }
+
+    private void debugIntArray(int[] vals) {
+        StringBuilder sb = new StringBuilder();
+        for(int x : vals) {
+            sb.append(x + ";");
+        }
+        Log.i(TAG, "Int array;" + sb.toString());
+    }
+
+    private boolean isBetweenDegree(double d1, double d2, Double degree) {
+        if (d2 > d1) {
+            return d1 < degree && degree < d2;
+        } else {
+            // e.g.: d1 = 350; d2 = 10
+            return d1 < degree || degree < d2;
+        }
+    }
+
+    private Mat doTransform(Point[] trn, Mat img) {
+        List<Point> src_pnt = new ArrayList<Point>();
+        for(int i = 0; i < 4; i++) {
+            src_pnt.add(trn[i]);
+        }
+        Mat startM = Converters.vector_Point2f_to_Mat(src_pnt);
+
+        List<Point> dst_pnt = new ArrayList<Point>();
+        for(int i = 4; i < 8; i++) {
+            dst_pnt.add(trn[i]);
+        }
+        Mat endM = Converters.vector_Point2f_to_Mat(dst_pnt);
+
+        Mat perspectiveTransform = Imgproc.getPerspectiveTransform(startM, endM);
+
+        Mat out = img.clone();
+        Imgproc.warpPerspective(img, out, perspectiveTransform, img.size(), Imgproc.INTER_CUBIC); // Imgproc.INTER_LINEAR + Imgproc.CV_WARP_FILL_OUTLIERS
+
+        return out;
     }
 
     private ArrayList<double[]> findLocaleMaximas(ArrayList<double[]> pointNumbers) {
@@ -830,7 +980,7 @@ public class DokiPicture extends Activity {
             maxH = Math.max(harrisResultVals[j], maxH);
         }
 
-        Log.i(TAG, "XXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + ":min:" + minH + ":max:" + maxH);
+        Log.i(TAG, "XhXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + ":min:" + minH + ":max:" + maxH);
         //Mat harrisResult = matOriginalPhoto.clone();
         int nullak = 0;
         double val;
@@ -1044,9 +1194,9 @@ public class DokiPicture extends Activity {
                                 maxH = Math.max(p, maxH);
                             }
                         }
-                        Log.i(TAG, "XXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + ":min:" + minH + ":max:" + maxH);
+                        Log.i(TAG, "XhXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k: " + k + ":min:" + minH + ":max:" + maxH);
                     }catch(Exception e) {
-                        Log.i(TAG, "XXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k:" + k + ":Kikattant...." + e.getMessage());
+                        Log.i(TAG, "XhXX blockSize:" + blockSize + ":apertureSize:" + apertureSize + ":k:" + k + ":Kikattant...." + e.getMessage());
                     }
                 }
             }
