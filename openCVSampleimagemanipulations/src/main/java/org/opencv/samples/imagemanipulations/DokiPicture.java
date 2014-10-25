@@ -60,7 +60,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 111;
+    private int saveStepsToImage = 999;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -272,6 +272,13 @@ public class DokiPicture extends Activity {
         // this is not exact, but gives +-2 degree all the segments
         ArrayList<Integer> segments = findColorSegments(pointBull, matOriginalBeforeTrans);
 
+        Point p, p2;
+        Scalar color = new Scalar(255,255,255);
+        for(Integer i: segments) {
+            p = MLine.rotatePoint(pointBull, i.intValue(), 200);
+            p2 = MLine.rotatePoint(pointBull, i.intValue(), 40);
+            Core.line(matOriginalCopy, p2, p, color);
+        }
 
 
         /*
@@ -364,6 +371,10 @@ public class DokiPicture extends Activity {
             ArrayList<Integer> colorChange = new ArrayList<Integer>();
             for (double i = 0; i < 360; i += degreeStep) {
                 p = MLine.rotatePoint(bull, i, currDistance);
+                if (p.y > matOriginalCopy.rows() || p.x > matOriginalCopy.cols()) {
+                    found = true;
+                    continue;
+                }
                 int color = PVec.getColor(matOriginalCopy.get((int) p.y, (int) p.x)) % 2;
                 if (prevColor == -1) {
                     prevColor = color;
