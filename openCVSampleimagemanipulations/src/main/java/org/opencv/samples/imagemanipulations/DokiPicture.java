@@ -59,7 +59,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 12;
+    private int saveStepsToImage = 111;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -79,148 +79,6 @@ public class DokiPicture extends Activity {
     //    private ArrayList<MLine> goodLines;
 //    private Point pointBull;
 
-    class MLine {
-        public Point start = new Point();
-        public Point end = new Point();
-        public double angle;
-        public double intersect;
-        public boolean important;
-
-        public MLine() {
-        }
-        public MLine(float x1, float y1, float x2, float y2) {
-            this((double) x1, (double) y1, (double) x2, (double) y2);
-        }
-        public MLine(double x1, double y1, double x2, double y2) {
-            start.x = x1;
-            start.y = y1;
-            end.x = x2;
-            end.y = y2;
-            angle = (end.y - start.y) / (end.x - start.x);
-            intersect = y1 - angle * x1;
-            important = false;
-        }
-        public MLine reset(Point start, Point end) {
-            this.start.x = start.x;
-            this.start.y = start.y;
-            this.end.x = end.x;
-            this.end.y = end.y;
-            angle = (end.y - start.y) / (end.x - start.x);
-            intersect = start.y - angle * start.x;
-            important = false;
-            return this;
-        }
-
-        public double getPerpAngle() {
-            return (start.x - end.x) / (start.y - end.y);
-        }
-
-        public double length() {
-            return Math.sqrt(sq(start.x - end.x) + sq(start.y - end.y));
-        }
-
-        public double distance(Point b) {
-            return Math.abs((end.x - start.x) * (start.y - b.y) - (start.x - b.x) * (end.y - start.y)) /
-                    Math.sqrt(sq(end.x - start.x) + sq(end.y - start.y));
-        }
-
-        public double sq(double a) {
-            return a * a;
-        }
-
-        /**
-         * The closest distance from the start and the end of the line.
-         * If the point is in between, then the distance from the line.
-         * @param b
-         * @return
-         */
-        public double endDistanceOrDistance(Point b) {
-            if (start.x < b.x && b.x < end.x && start.y < b.y && b.y < end.y) {
-                return distance(b);
-            }
-            double dstFromStart = Math.sqrt(sq(b.x - start.x) + sq(b.y - start.y));
-            double dstFromEnd = Math.sqrt(sq(b.x - end.x) + sq(b.y - end.y));
-            return Math.min(dstFromStart, dstFromEnd);
-
-
-        }
-        /**
-         * The closest distance from the start and the end of the line.
-         * @param b
-         * @return
-         */
-        public double endDistance(Point b) {
-            double dstFromStart = Math.sqrt(sq(b.x - start.x) + sq(b.y - start.y));
-            double dstFromEnd = Math.sqrt(sq(b.x - end.x) + sq(b.y - end.y));
-            return Math.min(dstFromStart, dstFromEnd);
-
-
-        }
-
-        public double getAngeInDegree() {
-            double y = start.y - end.y;
-            double x = start.x - end.x;
-            double v = 180 * Math.atan2(y, x) / Math.PI;
-            if (v > 180) {
-                v = 180;
-            }
-            if (v < -180) {
-                v = -180;
-            }
-            if (v < 0) {
-                v += 360;
-            }
-            //Log.i(TAG, "arch: y: " + y + " x: " + x + " archtan: " + v);
-            return v;
-        }
-
-        public Point getStep() {
-            Point step = new Point();
-            double length;
-            if (Math.abs(start.x - end.x) > Math.abs(start.y-end.y)) {
-                length = Math.abs(start.x - end.x);
-            } else {
-                length = Math.abs(start.y - end.y);
-            }
-            step.x = (end.x - start.x) / length;
-            step.y = (end.y - start.y) / length;
-            return step;
-        }
-        public int getStepLength() {
-            if (Math.abs(start.x - end.x) > Math.abs(start.y-end.y)) {
-                return (int)Math.abs(start.x-end.x);
-            } else {
-                return (int)Math.abs(start.y - end.y);
-            }
-        }
-
-        public Point mirrorPoint(Point p, Point c) {
-            Point r = new Point();
-            r.x = p.x + 2 * (c.x - p.x);
-            r.y = p.y + 2 * (c.y - p.y);
-            return r;
-        }
-        public double distanceOfTwoPoints(Point a, Point b) {
-            return Math.sqrt(sq(a.x - b.x) + sq(a.y - b.y));
-        }
-
-        public Point rotatePoint(Point c, double degree, double radius) {
-            Point p = new Point();
-            double sin = Math.sin(Math.PI * degree / 180);
-            p.x = c.x + sin * radius;
-            double cos = Math.cos(Math.PI * degree / 180);
-            p.y = c.y + cos * radius;
-            //Log.i(TAG, "rotatePoint, bull;" + c.x +";"+ c.y + ";radius;" + radius + ";degree;" + degree + ";sin;" + sin + ";cos;" + cos + ";p;" + p.x +";"+p.y);
-            return p;
-        }
-
-        public double getTwoPointAngle(Point bull, Point a) {
-            double y = a.y - bull.y;
-            double x = a.x - bull.x;
-            double v = 180 * Math.atan2(y, x) / Math.PI;
-            return v;
-        }
-    }
 
 
     public DokiPicture() {
@@ -362,7 +220,7 @@ public class DokiPicture extends Activity {
         mImageViewH = mImageView.getHeight();
         Mat matOriginalPhoto = getOriginalPhotoMat();
         Log.i(TAG, "Photo loaded");
-        //saveImageToDisk(matOriginalPhoto, "step0-orig", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        //saveImageToDisk(matOriginalPhoto, "step00-0-orig", "doki", this, Imgproc.COLOR_RGBA2RGB);
 
         Mat matCannyGray = new Mat();
         Imgproc.Canny(matOriginalPhoto, matCannyGray, paramCanny1, paramCanny2);
@@ -371,9 +229,9 @@ public class DokiPicture extends Activity {
         // do harris instead of canny
 //        Mat harrisResult = Mat.zeros( matOriginalPhoto.size(), CvType.CV_8UC3);
 //        doHarrisProc(matOriginalPhoto, harrisResult);
-//        saveImageToDisk(harrisResult, "step0-harris.jpg", "doki", this, -1);
+//        saveImageToDisk(harrisResult, "step00-1-harris.jpg", "doki", this, -1);
 //        Imgproc.cvtColor(harrisResult, matCanny, Imgproc.COLOR_RGBA2GRAY);
-//        saveImageToDisk(matCanny, "step0-harris2.jpg", "doki", this, -1);
+//        saveImageToDisk(matCanny, "step00-2-harris2.jpg", "doki", this, -1);
 
         Mat matLines = new Mat();
         Imgproc.HoughLinesP(matCannyGray, matLines, 1, Math.PI/180, paramHLthreshold, paramHLminLineSize, paramHLlineGap);
@@ -381,7 +239,7 @@ public class DokiPicture extends Activity {
 
         Mat matCannyRgba = new Mat();
         Imgproc.cvtColor(matCannyGray, matCannyRgba, Imgproc.COLOR_GRAY2BGRA, 4);
-        //saveImageToDisk(matCanny, "step1-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        //saveImageToDisk(matCanny, "step01-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
         //matCannyRgba.release();
 
 //  -------------------------------------------------
@@ -389,14 +247,14 @@ public class DokiPicture extends Activity {
         Log.i(TAG, "HL vonalak rajzolasa");
         Mat matOriginalCopy = matOriginalPhoto.clone();
         ArrayList<MLine> goodLines = findGoodLines(matLines, matOriginalCopy);
-        saveImageToDisk(matOriginalCopy, "step2-vonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 2);
+        saveImageToDisk(matOriginalCopy, "step02-vonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 2);
         //matLines.release();
 
 //  --------------------------------------------------------------------
         // a fontos vonalak metszespontjait szamoljuk
         Log.i(TAG, "HL fonos vonalak metszespontja");
         Point pointBull = findBullFromGoodLines(goodLines, matOriginalCopy);
-        saveImageToDisk(matOriginalCopy, "step3-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
+        saveImageToDisk(matOriginalCopy, "step03-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
 
 //  --------------------------------------------------------------------
         // vegig megyunk az osszes vonalon, es a bullon atmenoket megkeressuk
@@ -405,27 +263,44 @@ public class DokiPicture extends Activity {
         Log.i(TAG, "bullon atmeno vonalak keresese");
         ArrayList<MLine> bullLines = findBullLines(allLines, pointBull, matOriginalCopy);
         bullLines.size();
-        saveImageToDisk(matOriginalCopy, "step7-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+        saveImageToDisk(matOriginalCopy, "step07-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
 
-        Point[] transRes = findCircle(pointBull, bullLines, matCannyGray, matCannyRgba);
+
+        Mat matOriginalBeforeTrans = matOriginalPhoto.clone();
+        Point[] transRes = findCircle(pointBull, bullLines, matCannyGray, matCannyRgba, matOriginalBeforeTrans);
         Mat transfomed = doTransform(transRes, matOriginalPhoto);
-        saveImageToDisk(transfomed, "step-12-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
-        Mat transfomed2 = doTransform(transRes, matCannyRgba);
-        saveImageToDisk(transfomed2, "step-12-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
-
-//  -------------------------------------------------
-        boolean doHarris = false;
-        if (doHarris) {
-            Log.i(TAG, "Harris");
-            Mat harrisResult = Mat.zeros(matOriginalPhoto.size(), CvType.CV_8UC3);
-            doHarrisProc(matOriginalPhoto, harrisResult);
-            saveImageToDisk(harrisResult, "step8-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
-//  -------------------------------------------------
-            // végig megyünk a bull-ba menő vonalakonés megnézzük, hogy a harris kimeneten hol vannak leágazásaok
-            findXing(bullLines, harrisResult);
-            saveImageToDisk(harrisResult, "step9-harris-es-bull-lines", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+        {
+            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
+            double tableSideDistance = 700 * trippleDistance / 290;
+            Point nBull = new Point(photoW/2, photoH/2);
+            Point p = new Point();
+            Scalar color = new Scalar(250, 200, 10);
+            for (int i = 9; i < 360; i += 18) {
+                p = MLine.rotatePoint(nBull, i, tableSideDistance);
+                Core.line(transfomed, nBull, p, color);
+            }
+            Core.circle(transfomed, nBull, (int)trippleDistance, color);
+            Core.circle(transfomed, nBull, (int)tableSideDistance, color);
         }
+        saveImageToDisk(transfomed, "step12-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
+        Mat transfomed2 = doTransform(transRes, matCannyRgba);
+        saveImageToDisk(transfomed2, "step12-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
+        Mat transformed3 = doTransform(transRes, matOriginalBeforeTrans);
+        saveImageToDisk(transformed3, "step12-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
 
+//  -------------------------------------------------
+//        boolean doHarris = false;
+//        if (doHarris) {
+//            Log.i(TAG, "Harris");
+//            Mat harrisResult = Mat.zeros(matOriginalPhoto.size(), CvType.CV_8UC3);
+//            doHarrisProc(matOriginalPhoto, harrisResult);
+//            saveImageToDisk(harrisResult, "step8-cornerHarrisDstNormScaled-d", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
+////  -------------------------------------------------
+//            // végig megyünk a bull-ba menő vonalakonés megnézzük, hogy a harris kimeneten hol vannak leágazásaok
+//            findXing(bullLines, harrisResult);
+//            saveImageToDisk(harrisResult, "step9-harris-es-bull-lines", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+//        }
+//
 //  -------------------------------------------------
         int h = mImageView.getHeight();
         int w = mImageView.getWidth();
@@ -459,7 +334,7 @@ public class DokiPicture extends Activity {
         mImageView.setImageBitmap(bitmap);
     }
 
-    private Point[] findCircle(Point bull, ArrayList<MLine> bullLines, Mat matCannyGray, Mat matCannyRgba) {
+    private Point[] findCircle(Point bull, ArrayList<MLine> bullLines, Mat matCannyGray, Mat matCannyRgba, Mat matOriginalCopy) {
         // megkeressük a leghosszabb bull vonalat, ami nem megy át a bullon
         double maxBullLineLengh = -1;
         MLine maxLine = null;
@@ -472,7 +347,7 @@ public class DokiPicture extends Activity {
             }
         }
         assert(maxBullLineLengh > -1);
-        double maxLength = maxBullLineLengh * 1.2;
+        double maxLength = maxBullLineLengh * 1.4;
 
         int dstChannels = matCannyGray.channels();
         int pixelNum = (int)matCannyGray.total() * dstChannels;
@@ -488,6 +363,7 @@ public class DokiPicture extends Activity {
         MLine l = new MLine();
         ArrayList<ArrayList<Double>> points = new ArrayList<ArrayList<Double>>();
         ArrayList<double[]> pointNumbers = new ArrayList<double[]>();
+        ArrayList<PVec> pVecs = new ArrayList<PVec>();
         for(double i = 0; i < 360; i+= degreeStep) {
             // TODO: itt elég lenne egy viszonylag szűk sávban körbe menni. A bullhoz közeli és nagyon
             // távoli rész inkább csak ront a pontosságon.
@@ -497,16 +373,44 @@ public class DokiPicture extends Activity {
             //Core.circle(matCannyRgba, p, 3, lightBlue);
             //Core.line(matCannyRgba, bull, p, lightBlue);
             l.reset(bull, p);
-            currPoints.addAll(deteckPointsOnLine(cannyVals, matCannyRgba, l));
+            //currPoints.addAll(deteckPointsOnLine(cannyVals, matCannyRgba, l));
+            PVec pv = detecktColorPoints(i, l, matOriginalCopy);
+            pVecs.add(pv);
+            //pv.logStat(TAG);
             points.add(currPoints);
             double[] pn = new double[2];
             pn[0] = i;
             pn[1] = sumPoints(currPoints, maxLength);
             pointNumbers.add(pn);
         }
+        boolean isPrevBlack = false;
+        Scalar cWhite = new Scalar(255, 255, 255);
+        Scalar[] colors = new Scalar[4];
+        colors[0] = new Scalar(0,0,0);
+        colors[1] = new Scalar(255,255,255);
+        colors[2] = new Scalar(255,0,0);
+        colors[3] = new Scalar(0,255,0);
+        for(int i = 0; i < pVecs.size(); i++) {
+            PVec pv = pVecs.get(i);
+            if (i==0) isPrevBlack = pv.isBlackField;
+            if (isPrevBlack != pv.isBlackField) {
+                Point point = MLine.rotatePoint(pv.start, pv.degree, maxLength);
+                Core.line(matOriginalCopy, pv.start, point, cWhite);
+                Core.putText(matOriginalCopy, ""+pv.degree, point, 1, 0.75, cWhite);
+                isPrevBlack = pv.isBlackField;
+            }
+            Point point1 = new Point();
+            for(int j=0; j < pv.pixelColors.size(); j++) {
+                point1.x = 10 + MLine.distanceOfTwoPoints(pv.start, pv.points.get(j)) * 2;
+                point1.y = i * 2 + 10;
+                Core.line(matOriginalCopy, point1, point1, colors[pv.pixelColors.get(j).intValue()], 2);
+            }
+        }
+        saveImageToDisk(matOriginalCopy, "step11-00", "doki", this, Imgproc.COLOR_RGBA2RGB, 111);
+
         Core.line(matCannyRgba, new Point(bull.x-5, bull.y), new Point(bull.x+5, bull.y), new Scalar(255, 0, 255), 1);
         Core.line(matCannyRgba, new Point(bull.x, bull.y-5), new Point(bull.x, bull.y+5), new Scalar(255, 0, 255), 1);
-        //saveImageToDisk(matCannyRgba, "step-11", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
+        //saveImageToDisk(matCannyRgba, "step11-00", "doki", this, Imgproc.COLOR_RGBA2RGB, 111);
 
         ArrayList<double[]> linesFromBull = findLocaleMaximas(pointNumbers);
         Scalar c = new Scalar(0, 255, 255);
@@ -536,9 +440,11 @@ public class DokiPicture extends Activity {
             p = maxLine.rotatePoint(bull, d[0], maxLength);
             Core.line(matCannyRgba, bull, p, c);
             Core.putText(matCannyRgba, ""+d[0], p, 1, 0.75, c);
+            Core.line(matOriginalCopy, bull, p, c);
+            Core.putText(matOriginalCopy, ""+d[0], p, 1, 0.75, c);
             prevD = d[0];
         }
-        saveImageToDisk(matCannyRgba, "step-11-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
+        saveImageToDisk(matCannyRgba, "step11-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
 
         // megkeressük a két legnagyobb szöget (max1, max2), ezek egymással szemben lesznek, és a köztük levő tripla
         // sáv merőleges lesz a bull-ra (nagyon remélem mindig igaz ez)
@@ -556,7 +462,7 @@ public class DokiPicture extends Activity {
         Core.circle(matCannyRgba, a2, 5, c, 2);
         Core.circle(matCannyRgba, b1, 5, c, 2);
         Core.circle(matCannyRgba, b2, 5, c, 2);
-        saveImageToDisk(matCannyRgba, "step-11-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
+        saveImageToDisk(matCannyRgba, "step11-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 11);
 
         // ezek a pontok a szemből nézett táblán itt vannak:
         Point frontBull = new Point(photoW/2, photoH/2);
@@ -647,13 +553,13 @@ public class DokiPicture extends Activity {
 
     private Mat doTransform(Point[] trn, Mat img) {
         List<Point> src_pnt = new ArrayList<Point>();
-        for(int i = 0; i < 4; i++) {
+        for(int i = 0; i < trn.length/2; i++) {
             src_pnt.add(trn[i]);
         }
         Mat startM = Converters.vector_Point2f_to_Mat(src_pnt);
 
         List<Point> dst_pnt = new ArrayList<Point>();
-        for(int i = 4; i < 8; i++) {
+        for(int i = trn.length/2; i < trn.length; i++) {
             dst_pnt.add(trn[i]);
         }
         Mat endM = Converters.vector_Point2f_to_Mat(dst_pnt);
@@ -779,6 +685,33 @@ public class DokiPicture extends Activity {
         return sum;
     }
 
+    private PVec detecktColorPoints(double degree, MLine l, Mat matOriginalCopy) {
+        Point currP = l.start.clone();
+        Point step = l.getStep();
+        int stepLength = l.getStepLength();
+        int i = 0;
+        int x,y;
+        Point p = new Point();
+        int stepSkip = 1;
+        double[] val;
+        PVec pv = new PVec(3);
+        pv.setDegree(l.start, degree);
+        while(i < stepLength/stepSkip) {
+            currP.x += step.x * stepSkip;
+            currP.y += step.y * stepSkip;
+            i+=stepSkip;
+            pv.add(currP.clone(), matOriginalCopy.get((int) currP.y, (int) currP.x));
+        }
+        pv.fillStat();
+        for(Point[] r: pv.redRegions) {
+            Core.line(matOriginalCopy, r[0], r[1],new Scalar(255,80,0));
+        }
+        for(Point[] r: pv.greenRegions) {
+            Core.line(matOriginalCopy, r[0], r[1],new Scalar(60,250,20));
+        }
+        return pv;
+    }
+
     private ArrayList<Double> deteckPointsOnLine(byte[] cannyVals, Mat matCannyRgba, MLine l) {
         ArrayList<Double> result = new ArrayList<Double>();
         // végig megyünk a vonal pontjain
@@ -808,7 +741,7 @@ public class DokiPicture extends Activity {
                 }
             }
             if (Math.abs(currValue) > 0) {
-                Core.line(matCannyRgba, currP, currP, colorLight);
+                //Core.line(matCannyRgba, currP, currP, colorLight);
                 double distance = l.distanceOfTwoPoints(l.start, currP);
                 result.add(distance);
             }
@@ -820,7 +753,7 @@ public class DokiPicture extends Activity {
         // kivágjuk a minxy és maxxy közötti részt, csak azon próbálkozunk, hogy gyorsabb legyen
         Log.i(TAG, "Submat: " + minx + " " + maxx + " y: " + miny + " " + maxy);
         Mat subMat = img.submat((int)miny, (int)maxy, (int)minx, (int)maxx);
-        saveImageToDisk(subMat, "step-10-01", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+        saveImageToDisk(subMat, "step10-01", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
         Log.i(TAG, "Bull: " + bull.x + ",'" + bull.y + " Bull lines: ");
         int i = 0;
         // kiszedjük az azonos vonalakat, ahol 2 foknál kisebb a különbség
@@ -903,7 +836,7 @@ public class DokiPicture extends Activity {
         Core.line(img, b2, tb2, new Scalar(255,255,255));
 
         subMat = img.submat((int)(miny*0.8), (int)(maxy*1.2), (int)(minx*0.8), (int)(maxx*1.2));
-        saveImageToDisk(subMat, "step-10-03", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+        saveImageToDisk(subMat, "step10-03", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
 
         List<Point> src_pnt = new ArrayList<Point>();
         src_pnt.add(a1);
@@ -924,7 +857,7 @@ public class DokiPicture extends Activity {
         Mat out = img.clone();
         Imgproc.warpPerspective(img, out, perspectiveTransform, img.size(), Imgproc.INTER_CUBIC); // Imgproc.INTER_LINEAR + Imgproc.CV_WARP_FILL_OUTLIERS
         //saveImageToDisk(img, "step-10-04-0", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
-        saveImageToDisk(out, "step-10-04", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
+        saveImageToDisk(out, "step10-04", "doki", this, Imgproc.COLOR_RGBA2RGB, 10);
         //saveImageToDisk(out, "step-10-04.jpg", "doki", this, -1, 10);
 
     }
@@ -955,7 +888,7 @@ public class DokiPicture extends Activity {
     private void doHarrisProc(Mat matOriginalPhoto, Mat matResult) {
         Mat src_gray = new Mat();
         Imgproc.cvtColor(matOriginalPhoto, src_gray, Imgproc.COLOR_RGBA2GRAY);
-        saveImageToDisk(src_gray, "step7-gray.jpg", "doki", this, -1);
+        saveImageToDisk(src_gray, "step07-gray.jpg", "doki", this, -1);
 
         Mat dst;
         dst = Mat.zeros( matOriginalPhoto.size(), CvType.CV_32FC1 );
