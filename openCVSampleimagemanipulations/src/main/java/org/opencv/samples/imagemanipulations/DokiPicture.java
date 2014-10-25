@@ -33,6 +33,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -260,13 +261,20 @@ public class DokiPicture extends Activity {
         // vegig megyunk az osszes vonalon, es a bullon atmenoket megkeressuk
         // eltaroljuk az igy talalt egyeneseket
         // es a minxy es maxy pontokat, abban van a tabla
-        Log.i(TAG, "bullon atmeno vonalak keresese");
-        ArrayList<MLine> bullLines = findBullLines(allLines, pointBull, matOriginalCopy);
-        bullLines.size();
-        saveImageToDisk(matOriginalCopy, "step07-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+//        Log.i(TAG, "bullon atmeno vonalak keresese");
+//        ArrayList<MLine> bullLines = findBullLines(allLines, pointBull, matOriginalCopy);
+//        bullLines.size();
+//        saveImageToDisk(matOriginalCopy, "step07-bull", "doki", this, Imgproc.COLOR_RGBA2RGB, 9);
+//  --------------------------------------------------------------------
 
 
         Mat matOriginalBeforeTrans = matOriginalPhoto.clone();
+        // this is not exact, but gives +-2 degree all the segments
+        ArrayList<Integer> segments = findColorSegments(pointBull, matOriginalBeforeTrans);
+
+
+
+        /*
         Point[] transRes = findCircle(pointBull, bullLines, matCannyGray, matCannyRgba, matOriginalBeforeTrans);
         Mat transfomed = doTransform(transRes, matOriginalPhoto);
         {
@@ -287,6 +295,7 @@ public class DokiPicture extends Activity {
         saveImageToDisk(transfomed2, "step12-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
         Mat transformed3 = doTransform(transRes, matOriginalBeforeTrans);
         saveImageToDisk(transformed3, "step12-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
+        */
 
 //  -------------------------------------------------
 //        boolean doHarris = false;
@@ -332,6 +341,79 @@ public class DokiPicture extends Activity {
 
         Log.i(TAG, ">>>> setPic end");
         mImageView.setImageBitmap(bitmap);
+    }
+
+    private ArrayList<Integer> findColorSegments(Point bull, Mat matOriginalCopy) {
+        // egyre nagyobb körökben nézzük meg a pontok színét addig, amíg találunk olyat, ami pontosan 20 felé osztja a kört.
+        // nem baj, ha nem pontos, mert nem ezt fogjuk majd használni. Ez csak arra kell, hogy ha találunk 4 pontos pontot, akkor
+        // meg tudjuk mondani, hogy a nem elforgatott táblán hova esnek azok a pontok.
+
+        double minDegreeDiff = 6;
+        double degreeStep = 1;
+        double distanceStart = 20;
+        double distanceStep = 5;
+        // TODO: A Mat objektumból olvassuk a pontokat, ami sokkal lassab, mintha kikérnénk egyszer az egészet
+        // plusz nem kell az egész Mat, csak egy része is elég lenne
+        Point p;
+        boolean found = false;
+        double currDistance = distanceStart;
+        ArrayList<ArrayList<Integer>> colorChanges = new ArrayList<ArrayList<Integer>>();
+        while(!found) {
+            int prevColor = -1;
+            double prevStart = -1;
+            ArrayList<Integer> colorChange = new ArrayList<Integer>();
+            for (double i = 0; i < 360; i += degreeStep) {
+                p = MLine.rotatePoint(bull, i, currDistance);
+                int color = PVec.getColor(matOriginalCopy.get((int) p.y, (int) p.x)) % 2;
+                if (prevColor == -1) {
+                    prevColor = color;
+                    prevStart = i;
+                }
+                if (prevColor != color) {
+                    colorChange.add(Integer.valueOf((int)i));
+                    prevColor = color;
+                }
+            }
+            for(int i = 0; i < colorChange.size()-1; i++) {
+                if (colorChange.get(i+1) - colorChange.get(i) < minDegreeDiff) {
+                    colorChange.remove(i+1);
+                    colorChange.remove(i);
+                    i--;
+                }
+            }
+            if (colorChange.size() == 20) {
+                Log.i(TAG, "XXFCX;cella;"+colorChange.size()+";distance;"+currDistance+";cellak;"+debugArrayList(colorChange));
+                colorChanges.add(colorChange);
+            }
+            if (colorChanges.size() > 10) {
+                found = true;
+            }
+            currDistance += distanceStep;
+        }
+
+        ArrayList<ArrayList<Integer>> colorChanges2 = new ArrayList<ArrayList<Integer>>();
+        for(int i = 0; i < 20; i++) {
+            colorChanges2.add(new ArrayList<Integer>());
+        }
+        for(ArrayList<Integer> x: colorChanges) {
+            for(int i = 0; i < 20; i++) {
+                colorChanges2.get(i).add(x.get(i));
+            }
+        }
+        ArrayList<Integer> finalFields = new ArrayList<Integer>();
+        for(int i = 0; i < 20; i++) {
+            ArrayList<Integer> ai = colorChanges2.get(i);
+            Collections.sort(ai);
+            int sum = 0;
+            int count = 0;
+            for(int j = ai.size()/4; j <= 3 * ai.size() /4; j++) {
+                count++;
+                sum += ai.get(j);
+            }
+            finalFields.add(Integer.valueOf(sum/count));
+        }
+        Log.i(TAG, "Final fields: " + debugArrayList(finalFields));
+        return finalFields;
     }
 
     private Point[] findCircle(Point bull, ArrayList<MLine> bullLines, Mat matCannyGray, Mat matCannyRgba, Mat matOriginalCopy) {
@@ -534,6 +616,13 @@ public class DokiPicture extends Activity {
         }
     }
 
+    private String debugArrayList(ArrayList a) {
+        StringBuilder sb = new StringBuilder();
+        for(Object o : a) {
+            sb.append(o.toString() + ";");
+        }
+        return sb.toString();
+    }
     private void debugIntArray(int[] vals) {
         StringBuilder sb = new StringBuilder();
         for(int x : vals) {

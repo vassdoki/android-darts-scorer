@@ -39,6 +39,27 @@ public class PVec {
         this.channels = channels;
     }
 
+    /**
+     * @param pi 3 channel color values (RGB)
+     * @return // 0: black; 1: white; 2: red; 3: green
+     */
+    public static int getColor(double[] pi) {
+        if (pi[0] > RED_MIN && pi[0] > RED_RATIO * pi[1]  && pi[0] > RED_RATIO * pi[2]) {
+            return 2;
+        }
+        if (pi[1] > GREEN_RATIO * pi[0]  && pi[1] > GREEN_RATIO * pi[2]) {
+            return 3;
+        }
+        int pSumVals = 0;
+        for(int i = 0; i < 3; i++) {
+            pSumVals+=pi[i];
+        }
+        if (pSumVals > PIXEL_BLACK_LIMIT) {
+            return 1;
+        }
+        return 0;
+    }
+
     public void fillStat() {
         if (isStatFilled) {
             return;
