@@ -1,5 +1,7 @@
 package org.opencv.samples.imagemanipulations;
 
+import android.graphics.PointF;
+
 import org.opencv.core.Point;
 
 /**
@@ -145,5 +147,19 @@ class MLine {
         double x = a.x - bull.x;
         double v = 180 * Math.atan2(y, x) / Math.PI;
         return v;
+    }
+
+    public Point getIntersection(MLine l2) {
+        double a1 = (start.y - end.y) / (double)(start.x - end.x);
+        double b1 = start.y - a1 * start.x;
+
+        double a2 = (l2.start.y - l2.end.y) / (double)(l2.start.x - l2.end.x);
+        double b2 = l2.start.y - a2 * l2.start.x;
+
+        if (Math.abs(a1 - a2) < 0.00001) return null;
+
+        double x = (b2 - b1) / (a1 - a2);
+        double y = a1 * x + b1;
+        return new Point((float)x, (float)y);
     }
 }
