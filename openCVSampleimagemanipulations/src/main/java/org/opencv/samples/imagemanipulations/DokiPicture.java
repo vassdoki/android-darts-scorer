@@ -33,7 +33,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,7 +59,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 14;
+    private int saveStepsToImage = 15;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -272,14 +271,67 @@ public class DokiPicture extends Activity {
         // this is not exact, but gives +-2 degree all the segments
         ArrayList<Integer> segments = findColorSegments(pointBull, matOriginalBeforeTrans);
         Point[] transRes = getPointsForTransFromSegments2(pointBull, matOriginalBeforeTrans, segments);
-        finalizeTransformationBase(matOriginalPhoto, pointBull, transRes);
+        finalizeTransformationBase(matOriginalPhoto.clone(), pointBull, transRes);
         {
-            Mat transformed3 = doTransform(transRes, matOriginalBeforeTrans);
+            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
             debugImage(transformed3, tableSideDistance, trippleDistance);
-            saveImageToDisk(transformed3, "step14-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 14);
+            saveImageToDisk(transformed3, "step15-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            transformed3.release();
         }
+
+        matOriginalBeforeTrans = matOriginalPhoto.clone();
+        checkLineBalance(transRes, pointBull, matOriginalBeforeTrans);
+        matOriginalBeforeTrans.release();
+        {
+            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
+            double tableSideDistance = 700 * trippleDistance / 290;
+            debugImage(transformed3, tableSideDistance, trippleDistance);
+            saveImageToDisk(transformed3, "step15-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            transformed3.release();
+        }
+        finalizeTransformationBase(matOriginalPhoto.clone(), pointBull, transRes);
+        {
+            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
+            double tableSideDistance = 700 * trippleDistance / 290;
+            debugImage(transformed3, tableSideDistance, trippleDistance);
+            saveImageToDisk(transformed3, "step15-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            transformed3.release();
+        }
+        matOriginalBeforeTrans = matOriginalPhoto.clone();
+        checkLineBalance(transRes, pointBull, matOriginalBeforeTrans);
+        {
+            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
+            double tableSideDistance = 700 * trippleDistance / 290;
+            debugImage(transformed3, tableSideDistance, trippleDistance);
+            saveImageToDisk(transformed3, "step15-4", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            transformed3.release();
+        }
+        finalizeTransformationBase(matOriginalPhoto.clone(), pointBull, transRes);
+        {
+            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
+            double tableSideDistance = 700 * trippleDistance / 290;
+            debugImage(transformed3, tableSideDistance, trippleDistance);
+            saveImageToDisk(transformed3, "step15-5", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            transformed3.release();
+        }
+        matOriginalBeforeTrans = matOriginalPhoto.clone();
+        checkLineBalance(transRes, pointBull, matOriginalBeforeTrans);
+        {
+            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
+            double tableSideDistance = 700 * trippleDistance / 290;
+            debugImage(transformed3, tableSideDistance, trippleDistance);
+            saveImageToDisk(transformed3, "step15-6", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            transformed3.release();
+        }
+
+
 
 //  -------------------------------------------------
 //        boolean doHarris = false;
@@ -329,12 +381,13 @@ public class DokiPicture extends Activity {
 
     private Point[] finalizeTransformationBase(Mat matOriginalPhoto, Point pointBull, Point[] transRes) {
         int prevSumError = 99999;
+        Point[] prevTransRes = null;
         int stepNum = 0;
         boolean cont = true;
         while(cont) {
             stepNum++;
             Mat matOrig1 = matOriginalPhoto.clone();
-            ArrayList<ArrayList<Integer>> colorLineDistances = finalizeTransformation(transRes, pointBull, matOrig1);
+            ArrayList<ArrayList<Integer>> colorLineDistances = findColoredCirclesDistance(transRes, pointBull, matOrig1);
             saveImageToDisk(matOrig1, "step13-" + stepNum, "doki", this, Imgproc.COLOR_RGBA2RGB, 13);
 
             // megpróbáljuk a duple belső ívét egy körre hozni
@@ -363,8 +416,10 @@ public class DokiPicture extends Activity {
             Log.i(TAG, "finalizeTransformationBase, step: " + stepNum + " currError: " + sumDiff);
             if (sumDiff >= prevSumError) {
                 cont = false;
+                transRes = prevTransRes;
             } else {
                 prevSumError = sumDiff;
+                prevTransRes = transRes.clone();
 
                 int[][] transEdit = new int[4][2];
                 transEdit[0][0] = 0; // x
@@ -400,11 +455,12 @@ public class DokiPicture extends Activity {
      * A vonalak vonalakra esnek.
      * A vonalak által bezárt szög stimmel.
      * A dupla és a tripla körökkel bezárható, nem lógnak ki.
-     * @param transRes
-     * @param bull
-     * @param matOriginal
+     * @param transRes az aktualis transzformacios matrix
+     * @param bull a bull
+     * @param matOriginal szines kep
+     * @return a negy iranyban a szines savok szele 4 szamkent
      */
-    private ArrayList<ArrayList<Integer>> finalizeTransformation(Point[] transRes, Point bull, Mat matOriginal) {
+    private ArrayList<ArrayList<Integer>> findColoredCirclesDistance(Point[] transRes, Point bull, Mat matOriginal) {
         Mat invMat = invertTransMatrix(transRes);
         Point frontBull = new Point(photoW/2, photoH/2);
         Scalar colorx = new Scalar(250, 200, 10);
@@ -416,10 +472,10 @@ public class DokiPicture extends Activity {
         Point p;
         for (int i = 9; i < 360; i += 18) {
             p = MLine.rotatePoint(frontBull, i, tableSideDistance);
-            Core.line(matOriginal, tBull, transformPoint(p, invMat), colorx);
+            //Core.line(matOriginal, tBull, transformPoint(p, invMat), colorx);
         }
         for (int i = 0; i < 4; i++) {
-            Core.circle(matOriginal, transformPoint(transRes[4+i], invMat), 3, colorx);
+            //Core.circle(matOriginal, transformPoint(transRes[4+i], invMat), 3, colorx);
         }
 
         // megkeressük a dupla és a tripla vonalat a 4 kitüntetett vonal mentén
@@ -442,7 +498,6 @@ public class DokiPicture extends Activity {
      * @return
      */
     private ArrayList<Integer> findColorLinesDistance(Point frontBull, Mat invMat, int degree, Mat matOriginal) {
-        boolean finished = false;
         int startDistance = 100;
         int currDistance = startDistance - 1;
         MLine lineToCheck = new MLine();
@@ -514,6 +569,163 @@ public class DokiPicture extends Activity {
             //Core.line(mat, currP, currP, colors[color]);
         }
         return coloredPixel;
+    }
+
+    private void checkLineBalance(Point[] transRes, Point pointBull, Mat pmat) {
+        ArrayList<ArrayList<Integer>> colorLineDistances = findColoredCirclesDistance(transRes, pointBull, pmat);
+        int[] coloredRegions = new int[4];
+        for(ArrayList<Integer> x:colorLineDistances) {
+            for(int i = 0; i < 4; i++) {
+                coloredRegions[i] += x.get(i);
+            }
+        }
+        for(int i = 0; i < 4; i++) {
+            coloredRegions[i] /= 4;
+        }
+        int startDistance = 100;
+        int step = 0;
+        Point frontBull = new Point(photoW/2, photoH/2);
+        Mat invMat;
+        ArrayList<Float> result;
+        float prevSumError = 999999;
+        Point[] prevTransRes = null;
+        boolean next = true;
+        Mat mat;
+
+        while(next) {
+            mat = pmat.clone();
+            step++;
+            invMat = invertTransMatrix(transRes);
+            result = getLineBalanceValues(mat, coloredRegions[3], startDistance, frontBull, invMat);
+            float sumSumError = 0;
+            float maxError = 0;
+            int maxId = -1;
+            for (int j = 0; j < 4; j++) {
+                if (Math.abs(result.get(j)) > Math.abs(maxError)) {
+                    maxError = result.get(j);
+                    maxId = j;
+                }
+                sumSumError += Math.abs(result.get(j));
+            }
+            Log.i(TAG, "lineBalance result, sum error: " + sumSumError + " values: " + result.get(0) + "," + result.get(1) + "," + result.get(2) + "," + result.get(3));
+            saveImageToDisk(mat, "step14-"+step, "doki", this, Imgproc.COLOR_RGBA2RGB, 14);
+            if (sumSumError > prevSumError || maxId == -1) {
+                next = false;
+                transRes = prevTransRes;
+            } else {
+                prevSumError = sumSumError;
+                prevTransRes = transRes.clone();
+                int[][] transEdit = new int[4][2];
+                transEdit[0][0] = 1; // x
+                transEdit[0][1] = 0; // y
+                transEdit[1][0] = 0; // x
+                transEdit[1][1] = -1; // y
+                transEdit[2][0] = -1; // x
+                transEdit[2][1] = 0; // y
+                transEdit[3][0] = 0; // x
+                transEdit[3][1] = 1; // y
+
+                invMat = invertTransMatrix(transRes);
+                Point change = transformPoint(new Point(transRes[maxId + 4].x + transEdit[maxId][0] * maxError, transRes[maxId + 4].y + transEdit[maxId][1] * maxError), invMat);
+                transRes[maxId].x = change.x;
+                transRes[maxId].y = change.y;
+            }
+        }
+    }
+
+    private ArrayList<Float> getLineBalanceValues(Mat mat, int coloredRegion, int startDistance, Point frontBull, Mat invMat) {
+        ArrayList<Float> result = new ArrayList<Float>();
+        MLine lineToCheck = new MLine();
+        for(int degree = 9; degree < 360; degree += 5 * 18) {
+            //Log.i(TAG, "Degree: " + degree + "--------------------------");
+            int currDistance = startDistance - 1;
+            int sumDiffNum = 0;
+            int diffCount = 0;
+            while (currDistance < coloredRegion) {
+                currDistance+=5;
+                Point centerPoint = MLine.rotatePoint(frontBull, degree, currDistance);
+                Point start = MLine.rotatePoint(centerPoint, (degree + 90) % 360, -49);
+                Point end = MLine.rotatePoint(centerPoint, (degree + 90) % 360, +49);
+                lineToCheck.reset(transformPoint(start, invMat), transformPoint(end, invMat));
+                sumDiffNum += getColorBalanceOnLine(lineToCheck, mat);
+                diffCount ++;
+            }
+            Core.line(mat, transformPoint(frontBull, invMat), transformPoint(MLine.rotatePoint(frontBull, degree, currDistance), invMat), new Scalar(255,0,0));
+            //Log.i(TAG, "Color balance, degree: " + degree + " value: " + (float)sumDiffNum / diffCount + " errorSum: " + sumDiffNum);
+            result.add((float)sumDiffNum/diffCount);
+        }
+        return result;
+    }
+
+    /**
+     * A paraméterül kapott szakasz pontjain végig megyünk és megmondjuk hol kellene lennie
+     * az elválasztó vonalnak.
+     * @param l line to check
+     * @param mat image
+     * @return pozitiv szam eseten a vonal vege fele tobb rossz helyen levo szin van, mint az eleje fele
+     */
+    private int getColorBalanceOnLine(MLine l, Mat mat) {
+        Point currP = l.start.clone();
+        Point step = l.getStep();
+        int stepLength = l.getStepLength();
+        int i = 0;
+        int color = -1;
+        int coloredPixel = 0;
+        double[] val;
+        Scalar[] colors = new Scalar[4];
+        colors[0] = new Scalar(0,0,255);
+        colors[1] = new Scalar(255,255,255);
+        colors[2] = new Scalar(255,0,0);
+        colors[3] = new Scalar(0,255,0);
+        ArrayList<Integer> cs = new ArrayList<Integer>();
+        while(i < stepLength) {
+            currP.x += step.x;
+            currP.y += step.y;
+            i+=1;
+            color = PVec.getColor(mat.get((int) currP.y, (int) currP.x));
+            cs.add(color % 2);
+            Core.line(mat, currP, currP, colors[color%2]);
+        }
+        // megnézzük, hogy a közepétől a széle felé haladva mennyi van a rossz oldalon
+        // ha már van egy jó, akkor a többi nem érdekel
+        int half = cs.size() / 2;
+        int sumLeft=0, sumRight=0;
+        for(int j = 0; j < cs.size(); j++) {
+            if (j < half) {
+                sumLeft += cs.get(j);
+            }
+            // direkt nem adjuk hozza a kozepet
+            if (j > half) {
+                sumRight += cs.get(j);
+            }
+        }
+        int colorLeft, colorRight;
+        if (sumLeft > sumRight) {
+            colorLeft = 1;
+            colorRight = 0;
+        } else {
+            colorLeft = 0;
+            colorRight = 1;
+        }
+        // megszamoljuk a kozeptol rossz helyen levoket, de amit jot talalunk a tobbi mar nem erdekel
+        int badLeft = 0;
+        int badRight = 0;
+        boolean continueLeft = true;
+        boolean continueRight = true;
+        for(int j = 1; j < half; j++) {
+            if (cs.get(half - j) != colorLeft && continueLeft) {
+                badLeft ++;
+            } else {
+                continueLeft = false;
+            }
+            if (cs.get(half + j) != colorRight && continueRight) {
+                badRight ++;
+            } else {
+                continueRight = false;
+            }
+        }
+        //Log.i(TAG, "xxx;balance;"+debugArrayList(cs) + ";result left;"+badLeft+";resultRight;"+badRight+";result;"+(badRight-badLeft));
+        return badRight - badLeft;
     }
 
     private Mat invertTransMatrix(Point[] t) {
