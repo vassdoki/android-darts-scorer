@@ -60,7 +60,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 999;
+    private int saveStepsToImage = 12;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -272,37 +272,85 @@ public class DokiPicture extends Activity {
         // this is not exact, but gives +-2 degree all the segments
         ArrayList<Integer> segments = findColorSegments(pointBull, matOriginalBeforeTrans);
 
+        int s1a=0, s1b=0, s2a=0, s2b=0;
+        int s1i=0;
+        int s2i=0;
+        int max1 = -1, max2 = -1;
+
         Point p, p2;
         Scalar color = new Scalar(255,255,255);
-        for(Integer i: segments) {
-            p = MLine.rotatePoint(pointBull, i.intValue(), 200);
-            p2 = MLine.rotatePoint(pointBull, i.intValue(), 40);
-            Core.line(matOriginalCopy, p2, p, color);
+        for(int i = 0; i < segments.size() - 1; i++) {
+            Integer degree = segments.get(i);
+            int size;
+            int sb = segments.get(i).intValue();
+            int sa;
+            if (i == 0) {
+                sa = 360 - segments.get(segments.size() - 1).intValue();
+                size = sb + sa;
+            } else {
+                sa = segments.get(i - 1).intValue();
+                size = sb - sa;
+            }
+
+            if (size >= max1) {
+                s2i = s1i;
+                max2 = max1;
+                s2a = s1a;
+                s2b = s1b;
+                max1 = size;
+                s1i = i;
+                s1a = sa;
+                s1b = sb;
+            }
+            p = MLine.rotatePoint(pointBull, degree.intValue(), 200);
+            p2 = MLine.rotatePoint(pointBull, degree.intValue(), 130);
+            Core.line(matOriginalBeforeTrans, p2, p, color);
+            p = MLine.rotatePoint(pointBull, degree.intValue(), 210);
+            Core.putText(matOriginalBeforeTrans, ""+sb, p, 1, 0.75, color);
+            p = MLine.rotatePoint(pointBull, (sa + sb)/2, 130);
+            Core.putText(matOriginalBeforeTrans, ""+size, p, 1, 0.75, color);
         }
 
 
-        /*
-        Point[] transRes = findCircle(pointBull, bullLines, matCannyGray, matCannyRgba, matOriginalBeforeTrans);
-        Mat transfomed = doTransform(transRes, matOriginalPhoto);
+        Point[] points1 = findCorners(s1a, s1b, pointBull, matOriginalBeforeTrans);
+        Core.circle(matOriginalBeforeTrans, points1[0], 3, color);
+        Core.circle(matOriginalBeforeTrans, points1[1], 3, color);
+        Point[] points2 = findCorners(s2a, s2b, pointBull, matOriginalBeforeTrans);
+        Core.circle(matOriginalBeforeTrans, points2[0], 3, color);
+        Core.circle(matOriginalBeforeTrans, points2[1], 3, color);
+        saveImageToDisk(matOriginalBeforeTrans, "step11-01", "doki", this, Imgproc.COLOR_RGBA2RGB, 1101);
+
+        // ezek a pontok a szemből nézett táblán itt vannak:
+        double ratio = 0.5;
+        Point frontBull = new Point(photoW * ratio, photoH * ratio);
+        double radius = 0.4 * photoH  * ratio;
+        Point ta1 = MLine.rotatePoint(frontBull, 9 + (s1i -1) * 18, radius);
+        Point ta2 = MLine.rotatePoint(frontBull, 9 + (s1i +0) * 18, radius);
+        Point tb1 = MLine.rotatePoint(frontBull, 9 + (s2i -1) * 18, radius);
+        Point tb2 = MLine.rotatePoint(frontBull, 9 + (s2i +0) * 18, radius);
+
+        Point[] transRes = new Point[]{points1[0], points1[1], points2[0], points2[1], ta1, ta2, tb1, tb2};
+
+        //Point[] transRes = findCircle(pointBull, bullLines, matCannyGray, matCannyRgba, matOriginalBeforeTrans);
+        //Mat transfomed = doTransform(transRes, matOriginalPhoto);
+        Mat transformed3 = doTransform(transRes, matOriginalBeforeTrans);
         {
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
             Point nBull = new Point(photoW/2, photoH/2);
-            Point p = new Point();
-            Scalar color = new Scalar(250, 200, 10);
+            Point px = new Point();
+            Scalar colorx = new Scalar(250, 200, 10);
             for (int i = 9; i < 360; i += 18) {
-                p = MLine.rotatePoint(nBull, i, tableSideDistance);
-                Core.line(transfomed, nBull, p, color);
+                px = MLine.rotatePoint(nBull, i, tableSideDistance);
+                Core.line(transformed3, nBull, px, colorx);
             }
-            Core.circle(transfomed, nBull, (int)trippleDistance, color);
-            Core.circle(transfomed, nBull, (int)tableSideDistance, color);
+            Core.circle(transformed3, nBull, (int)trippleDistance, colorx);
+            Core.circle(transformed3, nBull, (int)tableSideDistance, colorx);
         }
-        saveImageToDisk(transfomed, "step12-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
-        Mat transfomed2 = doTransform(transRes, matCannyRgba);
-        saveImageToDisk(transfomed2, "step12-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
-        Mat transformed3 = doTransform(transRes, matOriginalBeforeTrans);
+//        saveImageToDisk(transfomed, "step12-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
+//        Mat transfomed2 = doTransform(transRes, matCannyRgba);
+//        saveImageToDisk(transfomed2, "step12-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
         saveImageToDisk(transformed3, "step12-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 12);
-        */
 
 //  -------------------------------------------------
 //        boolean doHarris = false;
@@ -348,6 +396,113 @@ public class DokiPicture extends Activity {
 
         Log.i(TAG, ">>>> setPic end");
         mImageView.setImageBitmap(bitmap);
+    }
+
+    /**
+     * a és b szög között kell megtalálni azt az egyenes vonalat, ami X%-ban zöld vagy piros vonalat tartalmaz.
+     * Ha ez megvan, akkor még szélesebb vonalban a szín kezdeténél megkeressük a sarkot.
+     * @param a
+     * @param b
+     * @param matOriginalCopy
+     * @return
+     */
+    private Point[] findCorners(int a, int b, Point bull, Mat matOriginalCopy) {
+        double distanceStart = 20 - 1;
+        boolean found = false;
+        double currDistance = distanceStart;
+        int currentSegmentColor = -1;
+        Point p;
+        int[] segmentColorCount = new int[4];
+        int color=0;
+        while(!found) {
+            currDistance += 1;
+            // TODO: mi van ha 360-at atlepjuk?
+            int count = 0;
+            int colorCount = 0;
+            for(int i = a + 1; i < b; i++) {
+                count++;
+                p = MLine.rotatePoint(bull, i, currDistance);
+                try {
+                    color = PVec.getColor(matOriginalCopy.get((int) p.y, (int) p.x));
+                }catch (Exception e) {
+                    Log.i(TAG, "EXCEDPTION currDistance: " + currDistance + " x: " + p.x + " y: " + p.y + " colorCount: " + colorCount + " count: " + count);
+                    found = true;
+                }
+                segmentColorCount[color]++;
+                if (color > 1) {
+                    colorCount++;
+                }
+            }
+            if ((float)colorCount / count > 0.4) {
+                found = true;
+            } else {
+                Log.i(TAG, "currDistance: " + currDistance + " colorCount: " + colorCount + " count: " + count);
+            }
+        }
+
+        // currDistance a távolságot tartalmazza, ahol 75%-a a pontoknak színes.
+        // A szegmens színe
+        if (segmentColorCount[0] + segmentColorCount[2] > segmentColorCount[1] + segmentColorCount[3]) {
+            currentSegmentColor = 0;
+            Core.line(matOriginalCopy, MLine.rotatePoint(bull, a, currDistance), MLine.rotatePoint(bull, b, currDistance), new Scalar(200,0,0));
+        } else {
+            currentSegmentColor = 1;
+            Core.line(matOriginalCopy, MLine.rotatePoint(bull, a, currDistance), MLine.rotatePoint(bull, b, currDistance), new Scalar(0,200,0));
+        }
+        Log.i(TAG, "Segment color: " + segmentColorCount[0] + "," + segmentColorCount[1] + "," + segmentColorCount[2] + "," + segmentColorCount[3] + " res: " + currentSegmentColor);
+        // megkeressuk mindket iranyba a szin valtast:
+        Point[] res = new Point[2];
+        res[0] = findCorners2(currentSegmentColor, currDistance, -1, a, b, bull, matOriginalCopy);
+        res[1] = findCorners2(currentSegmentColor, currDistance, 1, a, b, bull, matOriginalCopy);
+        return res;
+    }
+
+    private Point findCorners2(int currentSegmentColor, double currDistance, int direction, int a, int b, Point bull, Mat matOriginalCopy) {
+        int edge = -1;
+        Point p = null;
+        Point prevPoint = null;
+        Point toPrevPoint = null;
+        int center = (a + b) / 2;
+        double d = 1;
+        Scalar[] colors = new Scalar[4];
+        colors[0] = new Scalar(50,50,50);
+        colors[1] = new Scalar(255,255,255);
+        colors[2] = new Scalar(255,0,0);
+        colors[3] = new Scalar(0,255,0);
+
+        while(edge == -1) {
+            int count = 0;
+            int colorCount = 0;
+            if (edge == -1) {
+                for (int i = -10; i < 11; i++) {
+                    p = MLine.rotatePoint(bull, center + (direction * d), currDistance + i);
+                    if (i == 0) {
+                        toPrevPoint = p;
+                    }
+                    int color = PVec.getColor(matOriginalCopy.get((int) p.y, (int) p.x));
+
+                    //Core.line(matOriginalCopy, p, p, colors[color]);
+
+                    if (color % 2 != currentSegmentColor) {
+                        colorCount++;
+                    }
+                    count++;
+                }
+                if ((float) colorCount / count > 0.75) {
+                    Log.i(TAG, "findCorners2 FOUND: currentScolor: " + currentSegmentColor + " currDistance: " + currDistance + " direction: " + direction + " a: " + a + " b: " + b + " colorCount: " + colorCount + " count: " + count);
+                    if (prevPoint == null) {
+                        return p;
+                    } else {
+                        return prevPoint;
+                    }
+                } else {
+                    Log.i(TAG, "findCorners2: currentScolor: " + currentSegmentColor + " currDistance: " + currDistance + " direction: " + direction + " a: " + a + " b: " + b + " colorCount: " + colorCount + " count: " + count);
+                }
+            }
+            d += 0.5;
+            prevPoint = toPrevPoint;
+        }
+        return p;
     }
 
     private ArrayList<Integer> findColorSegments(Point bull, Mat matOriginalCopy) {
