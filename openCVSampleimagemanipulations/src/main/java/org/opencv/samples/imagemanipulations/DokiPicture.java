@@ -55,7 +55,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 90299;
+    private int saveStepsToImage = 15;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -234,23 +234,40 @@ public class DokiPicture extends Activity {
         Point[] transRes = ptoa(transRes2);
         Log.i(TAG, "TransRes: " + debugTransRes(transRes));
 
+        Log.i(TAG, "Bull (" + aBull.x+","+aBull.y+") transzformalt helye szembol: " + transformPoint(pointBull,getTransformationMatrix(transRes)) + " ----------------------------");
+
         {
-            Mat transformedx = doTransform(transRes, colorImage.getMat());
-            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
-            double tableSideDistance = 700 * trippleDistance / 290;
-            debugImage(transformedx, tableSideDistance, trippleDistance);
-            saveImageToDisk(transformedx, "debug", this, Imgproc.COLOR_RGBA2RGB, 902);
+            LineError[] lineErrors = dartsTable.getLineErrors(5);
+            int prevSumError = dartsTable.getCircleErrorSum();
+            int step = 10;
+            int sumError = prevSumError - 1;
+            while(step < 40) {
+                prevSumError = sumError;
+
+                android.graphics.Point[] newTrans = dartsTable.getTransToFitCircle();
+                dartsTable.setTransPoints(newTrans);
+                dartsTable.setTrans(getTransformationMatrix(newTrans));
+                dartsTable.setInvTrans(invertTransMatrix(newTrans));
+                transRes = ptoa(newTrans);
+                Mat transformed3 = doTransform(transRes, colorImage.getMat());
+                debugImage(transformed3);
+                saveImageToDisk(transformed3, "step" + step, this, Imgproc.COLOR_RGBA2RGB, 15);
+
+                lineErrors = dartsTable.getLineErrors(5);
+                sumError = dartsTable.getCircleErrorSum();
+                step++;
+                Log.i(TAG, "sumError: " + sumError + " prevSumError: " + prevSumError);
+            }
         }
 
-        Log.i(TAG, "Bull (" + aBull.x+","+aBull.y+") transzformalt helye szembol: " + transformPoint(pointBull,getTransformationMatrix(transRes)));
-
+/*
         transRes = finalizeTransformationBase(colorImage.getMat(), pointBull, transRes);
         Log.i(TAG, "Finalize utan TransRes: " + debugTransRes(transRes));
         {
             Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
-            debugImage(transformed3, tableSideDistance, trippleDistance);
+            debugImage(transformed3);
             saveImageToDisk(transformed3, "step15-1", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
@@ -265,7 +282,7 @@ public class DokiPicture extends Activity {
             Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
-            debugImage(transformed3, tableSideDistance, trippleDistance);
+            debugImage(transformed3);
             saveImageToDisk(transformed3, "step15-2", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
@@ -274,7 +291,7 @@ public class DokiPicture extends Activity {
             Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
-            debugImage(transformed3, tableSideDistance, trippleDistance);
+            debugImage(transformed3);
             saveImageToDisk(transformed3, "step15-3", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
@@ -284,7 +301,7 @@ public class DokiPicture extends Activity {
             Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
-            debugImage(transformed3, tableSideDistance, trippleDistance);
+            debugImage(transformed3);
             saveImageToDisk(transformed3, "step15-4", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
@@ -293,25 +310,26 @@ public class DokiPicture extends Activity {
             Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
-            debugImage(transformed3, tableSideDistance, trippleDistance);
+            debugImage(transformed3);
             saveImageToDisk(transformed3, "step15-5", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
         matOriginalBeforeTrans = colorImage.getMat();
         transRes = checkLineBalance(transRes, pointBull, matOriginalBeforeTrans);
 
+        */
         // az utolsot megtartjuk, ez lesz a kimenet
         Mat transformed3 = doTransform(transRes, colorImage.getMat());
         double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
         double tableSideDistance = 700 * trippleDistance / 290;
-        debugImage(transformed3, tableSideDistance, trippleDistance);
-        saveImageToDisk(transformed3, "step15-6", this, Imgproc.COLOR_RGBA2RGB, 15);
+        debugImage(transformed3);
+        //saveImageToDisk(transformed3, "step15-6", this, Imgproc.COLOR_RGBA2RGB, 15);
 
 //  -------------------------------------------------
         int h = mImageView.getHeight();
         int w = mImageView.getWidth();
 
-        Mat matOriginalCopy = transformed3;
+        Mat matOriginalCopy = colorImage.getMat();
 
         int rowStart = Math.max(0, (int) (pointBull.y - h / 2));
         int colStart = Math.max(0, (int) (pointBull.x - w / 2));
@@ -937,16 +955,19 @@ public class DokiPicture extends Activity {
         return new Point(m1/m3, m2/m3);
     }
 
-    private void debugImage(Mat transformed3, double tableSideDistance, double trippleDistance) {
-        Point nBull = new Point(photoW/2, photoH/2);
+    private void debugImage(Mat transformed3) {
+        Point nBull = new Point(1200,600);
         Point px;
         Scalar colorx = new Scalar(250, 200, 10);
         for (int i = 9; i < 360; i += 18) {
-            px = MLine.rotatePoint(nBull, i, tableSideDistance);
+            px = MLine.rotatePoint(nBull, i, DartsTable.estDoubleDistance+DartsTable.estColoredWith);
             Core.line(transformed3, nBull, px, colorx);
         }
-        Core.circle(transformed3, nBull, (int)trippleDistance, colorx);
-        Core.circle(transformed3, nBull, (int)tableSideDistance, colorx);
+        Core.circle(transformed3, nBull, DartsTable.estBullSize, colorx);
+        Core.circle(transformed3, nBull, DartsTable.estTrippleDistance, colorx);
+        Core.circle(transformed3, nBull, DartsTable.estTrippleDistance + DartsTable.estColoredWith, colorx);
+        Core.circle(transformed3, nBull, DartsTable.estDoubleDistance, colorx);
+        Core.circle(transformed3, nBull, DartsTable.estDoubleDistance + DartsTable.estColoredWith, colorx);
     }
 
     private String debugArrayList(ArrayList a) {
@@ -961,7 +982,7 @@ public class DokiPicture extends Activity {
         Mat perspectiveTransform = getTransformationMatrix(trn);
         Mat out = img.clone();
         Imgproc.warpPerspective(img, out, perspectiveTransform, img.size(), Imgproc.INTER_CUBIC); // Imgproc.INTER_LINEAR + Imgproc.CV_WARP_FILL_OUTLIERS
-        return out;
+        return out.submat(0, 1200, 600, 1800);
     }
 
     private Mat getTransformationMatrix(Point[] trn) {

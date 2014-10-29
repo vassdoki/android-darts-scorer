@@ -1,25 +1,23 @@
 package org.opencv.samples.imagemanipulations;
 
-import android.graphics.PointF;
-
-import org.opencv.core.Point;
+import android.graphics.Point;
 
 /**
  * Created by vassdoki on 10/23/14.
  */
-class MLine {
+class MLinea {
     public Point start = new Point();
     public Point end = new Point();
     public double angle;
     public double intersect;
     public boolean important;
 
-    public MLine() {
+    public MLinea() {
     }
-    public MLine(float x1, float y1, float x2, float y2) {
-        this((double) x1, (double) y1, (double) x2, (double) y2);
+    public MLinea(float x1, float y1, float x2, float y2) {
+        this((int) x1, (int) y1, (int) x2, (int) y2);
     }
-    public MLine(double x1, double y1, double x2, double y2) {
+    public MLinea(int x1, int y1, int x2, int y2) {
         start.x = x1;
         start.y = y1;
         end.x = x2;
@@ -28,26 +26,31 @@ class MLine {
         intersect = y1 - angle * x1;
         important = false;
     }
-    @Deprecated
-    public MLine reset(Point start, Point end) {
+
+    public MLinea(Point pStart, Point pEnd) {
+        this(pStart.x, pStart.y, pEnd.x, pEnd.y);
+    }
+
+    public MLinea reset(Point start, Point end) {
         this.start.x = start.x;
         this.start.y = start.y;
         this.end.x = end.x;
         this.end.y = end.y;
-        angle = (end.y - start.y) / (end.x - start.x);
+        if (end.x - start.x == 0) {
+            angle = 9999;
+        } else {
+            angle = (end.y - start.y) / (end.x - start.x);
+        }
         intersect = start.y - angle * start.x;
         important = false;
         return this;
     }
-    public MLine reset(android.graphics.Point start, android.graphics.Point end) {
-        this.start.x = start.x;
-        this.start.y = start.y;
-        this.end.x = end.x;
-        this.end.y = end.y;
-        angle = (end.y - start.y) / (end.x - start.x);
-        intersect = start.y - angle * start.x;
-        important = false;
-        return this;
+
+    public Point getStart() {
+        return new Point(start.x, start.y);
+    }
+    public Point getEnd() {
+        return new Point(end.x, end.y);
     }
 
     public double getPerpAngle() {
@@ -116,16 +119,16 @@ class MLine {
         return v;
     }
 
-    public Point getStep() {
-        Point step = new Point();
+    public double[] getStep() {
+        double[] step = new double[2];
         double length;
         if (Math.abs(start.x - end.x) > Math.abs(start.y-end.y)) {
             length = Math.abs(start.x - end.x);
         } else {
             length = Math.abs(start.y - end.y);
         }
-        step.x = (end.x - start.x) / length;
-        step.y = (end.y - start.y) / length;
+        step[0] = (double)(end.x - start.x) / length;
+        step[1] = (double)(end.y - start.y) / length;
         return step;
     }
     public int getStepLength() {
@@ -145,32 +148,16 @@ class MLine {
     public static double distanceOfTwoPoints(Point a, Point b) {
         return Math.sqrt(sq(a.x - b.x) + sq(a.y - b.y));
     }
-    public static double distanceOfTwoPoints(android.graphics.Point a, android.graphics.Point b) {
-        return Math.sqrt(sq(a.x - b.x) + sq(a.y - b.y));
-    }
 
-
-    @Deprecated
     public static Point rotatePoint(Point c, double degree, double radius) {
         Point p = new Point();
         double sin = Math.sin(Math.PI * degree / 180);
-        p.x = c.x + sin * radius;
+        p.x = (int) (c.x + sin * radius);
         double cos = Math.cos(Math.PI * degree / 180);
-        p.y = c.y + cos * radius;
+        p.y = (int) (c.y + cos * radius);
         //Log.i(TAG, "rotatePoint, bull;" + c.x +";"+ c.y + ";radius;" + radius + ";degree;" + degree + ";sin;" + sin + ";cos;" + cos + ";p;" + p.x +";"+p.y);
         return p;
     }
-
-    public static android.graphics.Point rotatePoint(android.graphics.Point c, double degree, double radius) {
-        android.graphics.Point p = new android.graphics.Point();
-        double sin = Math.sin(Math.PI * degree / 180);
-        p.x = (int)(c.x + sin * radius);
-        double cos = Math.cos(Math.PI * degree / 180);
-        p.y = (int)(c.y + cos * radius);
-        //Log.i(TAG, "rotatePoint, bull;" + c.x +";"+ c.y + ";radius;" + radius + ";degree;" + degree + ";sin;" + sin + ";cos;" + cos + ";p;" + p.x +";"+p.y);
-        return p;
-    }
-
 
     public static double getTwoPointAngle(Point bull, Point a) {
         double y = a.y - bull.y;
@@ -179,7 +166,7 @@ class MLine {
         return v;
     }
 
-    public Point getIntersection(MLine l2) {
+    public Point getIntersection(MLinea l2) {
         double a1 = (start.y - end.y) / (double)(start.x - end.x);
         double b1 = start.y - a1 * start.x;
 
@@ -188,9 +175,9 @@ class MLine {
 
         if (Math.abs(a1 - a2) < 0.00001) return null;
 
-        double x = (b2 - b1) / (a1 - a2);
-        double y = a1 * x + b1;
-        return new Point((float)x, (float)y);
+        int x = (int) ((b2 - b1) / (a1 - a2));
+        int y = (int) (a1 * x + b1);
+        return new Point(x, y);
     }
 
 }

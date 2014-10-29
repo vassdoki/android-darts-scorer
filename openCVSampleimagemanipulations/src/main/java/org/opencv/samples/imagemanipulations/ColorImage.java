@@ -65,6 +65,19 @@ public class ColorImage {
         return mat.clone();
     }
 
+    public int[] getPxOrBlack(int x, int y) {
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+            return new int[]{0,0,0,0};
+        } else {
+            int color = bmp32.getPixel(x, y);
+            return new int[]{
+                    (color & 0xff0000) >> 16,
+                    (color & 0x00ff00) >> 8,
+                    (color & 0x0000ff)
+            };
+        }
+    }
+
     /**
      * Returns a pixel as an RGB array from the original image.
      * @param x x coordinate
@@ -86,7 +99,7 @@ public class ColorImage {
      * @param y y coordinate
      * @return 0: black, 1: white, 2: red, 3: green
      */
-    public int getPxColor(int x, int y) {
+    public byte getPxColor(int x, int y) {
         int[] pi = getPx(x, y);
         if (pi[0] > RED_MIN && pi[0] > RED_RATIO * pi[1]  && pi[0] > RED_RATIO * pi[2]) {
             return 2;
@@ -153,7 +166,7 @@ public class ColorImage {
         // colorChanges-be
         while(colorChanges.get(0).size() < 10) {
             ArrayList<Integer> colorChangesAroundBull = getColorChangesAroundBull(bull, minDegreeDiff, degreeStep, currDistance);
-            Log.i(TAG, "XXFCX;cella;" + colorChangesAroundBull.size() + ";distance;" + currDistance + ";cellak;" + debugArrayList(colorChangesAroundBull));
+            //Log.i(TAG, "XXFCX;cella;" + colorChangesAroundBull.size() + ";distance;" + currDistance + ";cellak;" + debugArrayList(colorChangesAroundBull));
             if (colorChangesAroundBull.size() == 20) {
                 for(int i = 0; i < 20; i++) {
                     colorChanges.get(i).add(colorChangesAroundBull.get(i));
@@ -231,19 +244,21 @@ public class ColorImage {
      */
     public Point[] estimateTransformation(Point bull, ArrayList<Integer> segments) {
         Point[] res = new Point[8];
+        double avgTrippleDistance = 0;
         for(int i = 0; i < 4; i++) {
             double degree = segments.get(i * 5).doubleValue();
             Point point = findCornerOnLine(bull, degree);
             res[i] = point;
+            avgTrippleDistance += MLine.distanceOfTwoPoints(bull, point);
             debugCircle("est_trans", point, 5, 255,255,0);
         }
+        avgTrippleDistance /= 4;
 
         // ezek a pontok a szemből nézett táblán itt vannak:
-        double ratio = 0.5;
-        Point frontBull = new Point((int)(getWidth() * ratio), (int)(getHeight() * ratio));
-        double radius = 0.4 * getHeight()  * ratio;
+        Point frontBull = new Point(1200, 600);
         for(int i = 0; i < 4; i++) {
-            Point point = MLine.rotatePoint(frontBull, 9 + (i * 5) * 18, radius);
+            double distance = (MLine.distanceOfTwoPoints(bull, res[i]) / avgTrippleDistance) * DartsTable.estTrippleDistance;
+            Point point = MLine.rotatePoint(frontBull, 9 + (i * 5) * 18, distance);
             debugCircle("est_trans", point, 5, 0,255,0);
             res[4+i] = point;
         }
@@ -317,6 +332,26 @@ public class ColorImage {
         paint.setARGB(255, r, g, b);
         c.drawLine(p1.x, p1.y, p2.x, p2.y, paint);
     }
+    public void debugPoint(String key, Point p1, int r, int g, int b) {
+        Canvas c;
+        if (debugCanvas.containsKey(key)) {
+            c = debugCanvas.get(key);
+        } else {
+            Bitmap bmp = Bitmap.createBitmap(bmp32);
+            debugBitmap.put(key, bmp);
+            c = new Canvas(bmp);
+            debugCanvas.put(key, c);
+        }
+        Paint paint = new Paint();
+        paint.setARGB(255, r, g, b);
+        c.drawLine(p1.x, p1.y, p1.x+1, p1.y+1, paint);
+    }
+    public void debugPoint(String key, Point p1, int color) {
+        debugPoint(key, p1,  (color & 0xff0000) >> 16, (color & 0x00ff00) >> 8, color & 0x0000ff);
+    }
+    public void debugLine(String key, Point p1, Point p2, int color) {
+        debugLine(key, p1, p2, (color & 0xff0000) >> 16, (color & 0x00ff00) >> 8, color & 0x0000ff);
+    }
 
     public void debugCircle(String key, Point p1, float radius, int r, int g, int b) {
         Canvas c;
@@ -361,7 +396,7 @@ public class ColorImage {
 
             File f = new File(dir, key + ".png");
             f.createNewFile();
-            System.out.println("file created " + f.toString());
+            Log.i(TAG, "file created " + f.toString());
             FileOutputStream out = new FileOutputStream(f);
             bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
             deleteDebugCanvas(key);
