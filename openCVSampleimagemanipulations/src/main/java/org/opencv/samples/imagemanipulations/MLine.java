@@ -132,6 +132,7 @@ class MLine {
         return Math.sqrt(sq(a.x - b.x) + sq(a.y - b.y));
     }
 
+    @Deprecated
     public static Point rotatePoint(Point c, double degree, double radius) {
         Point p = new Point();
         double sin = Math.sin(Math.PI * degree / 180);
@@ -141,6 +142,17 @@ class MLine {
         //Log.i(TAG, "rotatePoint, bull;" + c.x +";"+ c.y + ";radius;" + radius + ";degree;" + degree + ";sin;" + sin + ";cos;" + cos + ";p;" + p.x +";"+p.y);
         return p;
     }
+
+    public static android.graphics.Point rotatePoint(android.graphics.Point c, double degree, double radius) {
+        android.graphics.Point p = new android.graphics.Point();
+        double sin = Math.sin(Math.PI * degree / 180);
+        p.x = (int)(c.x + sin * radius);
+        double cos = Math.cos(Math.PI * degree / 180);
+        p.y = (int)(c.y + cos * radius);
+        //Log.i(TAG, "rotatePoint, bull;" + c.x +";"+ c.y + ";radius;" + radius + ";degree;" + degree + ";sin;" + sin + ";cos;" + cos + ";p;" + p.x +";"+p.y);
+        return p;
+    }
+
 
     public static double getTwoPointAngle(Point bull, Point a) {
         double y = a.y - bull.y;
@@ -162,4 +174,5 @@ class MLine {
         double y = a1 * x + b1;
         return new Point((float)x, (float)y);
     }
+
 }

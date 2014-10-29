@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -35,13 +34,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.opencv.core.Core.convertScaleAbs;
 import static org.opencv.core.Core.normalize;
@@ -59,7 +55,7 @@ public class DokiPicture extends Activity {
     // a terulet hataroloja, ahol a tabla van a kepen
     double minx=1000000, miny=1000000, maxx=-1000000, maxy=-1000000;
 
-    private int saveStepsToImage = 9915;
+    private int saveStepsToImage = 90299;
     // imageView's dimensions
     private int mImageViewW;
     private int mImageViewH;
@@ -211,106 +207,111 @@ public class DokiPicture extends Activity {
         Log.i(TAG, ">>>> setPic start");
         mImageViewW = mImageView.getWidth();
         mImageViewH = mImageView.getHeight();
-        Mat matOriginalPhoto = getOriginalPhotoMat();
-        Log.i(TAG, "Photo loaded");
-        //saveImageToDisk(matOriginalPhoto, "step00-0-orig", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        ColorImage colorImage = new ColorImage(mCurrentPhotoPath);
+        photoW = colorImage.getWidth();
+        photoH = colorImage.getHeight();
 
-        Mat matCannyGray = new Mat();
-        Imgproc.Canny(matOriginalPhoto, matCannyGray, paramCanny1, paramCanny2);
-        Log.i(TAG, "Canny processed");
-
-        Mat matLines = new Mat();
-        Imgproc.HoughLinesP(matCannyGray, matLines, 1, Math.PI/180, paramHLthreshold, paramHLminLineSize, paramHLlineGap);
-        Log.i(TAG, "HoughLinesP processed");
-
-        Mat matCannyRgba = new Mat();
-        Imgproc.cvtColor(matCannyGray, matCannyRgba, Imgproc.COLOR_GRAY2BGRA, 4);
-        //saveImageToDisk(matCanny, "step01-canny", "doki", this, Imgproc.COLOR_RGBA2RGB);
-        //matCannyRgba.release();
-
-//  -------------------------------------------------
-        // osszes vonal sargaval, es fontosak meghatarozasa
-        Log.i(TAG, "HL vonalak rajzolasa");
-        Mat matOriginalCopy = matOriginalPhoto.clone();
-        ArrayList<MLine> goodLines = findGoodLines(matLines, matOriginalCopy);
-        saveImageToDisk(matOriginalCopy, "step02-vonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 2);
-        //matLines.release();
-
-//  --------------------------------------------------------------------
-        // a fontos vonalak metszespontjait szamoljuk
-        Log.i(TAG, "HL fonos vonalak metszespontja");
-        Point pointBull = findBullFromGoodLines(goodLines, matOriginalCopy);
-        saveImageToDisk(matOriginalCopy, "step03-fontosVonalak", "doki", this, Imgproc.COLOR_RGBA2RGB, 8);
+        Point pointBull = findBull(colorImage);
+        android.graphics.Point aBull = new android.graphics.Point((int) pointBull.x, (int) pointBull.y);
+        Log.i(TAG, "Bull: " + aBull.x +","+aBull.y);
 
 //  --------------------------------------------------------------------
 
-        Mat matOriginalBeforeTrans = matOriginalPhoto.clone();
+        Mat matOriginalBeforeTrans = colorImage.getMat();
         // this is not exact, but gives +-2 degree all the segments
-        ArrayList<Integer> segments = findColorSegments(pointBull, matOriginalBeforeTrans);
-        Point[] transRes = getPointsForTransFromSegments2(pointBull, matOriginalBeforeTrans, segments);
-        transRes = finalizeTransformationBase(matOriginalPhoto.clone(), pointBull, transRes);
+        ArrayList<Integer> segments = colorImage.estimateColorSegments(aBull);
+        Log.i(TAG, "Segments: " + debugArrayList(segments));
+        android.graphics.Point[] transRes2 = colorImage.estimateTransformation(aBull, segments);
+        Log.i(TAG, "TransRes2: " + debugTransRes2(transRes2));
+
+        // set up the dartsTable based on the estimations
+        DartsTable dartsTable = new DartsTable(colorImage);
+        dartsTable.setOrigBull(aBull);
+        dartsTable.setTransPoints(transRes2);
+        dartsTable.setTrans(getTransformationMatrix(transRes2));
+        dartsTable.setInvTrans(invertTransMatrix(transRes2));
+
+        Point[] transRes = ptoa(transRes2);
+        Log.i(TAG, "TransRes: " + debugTransRes(transRes));
+
         {
-            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            Mat transformedx = doTransform(transRes, colorImage.getMat());
+            double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
+            double tableSideDistance = 700 * trippleDistance / 290;
+            debugImage(transformedx, tableSideDistance, trippleDistance);
+            saveImageToDisk(transformedx, "debug", this, Imgproc.COLOR_RGBA2RGB, 902);
+        }
+
+        Log.i(TAG, "Bull (" + aBull.x+","+aBull.y+") transzformalt helye szembol: " + transformPoint(pointBull,getTransformationMatrix(transRes)));
+
+        transRes = finalizeTransformationBase(colorImage.getMat(), pointBull, transRes);
+        Log.i(TAG, "Finalize utan TransRes: " + debugTransRes(transRes));
+        {
+            Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
             debugImage(transformed3, tableSideDistance, trippleDistance);
-            saveImageToDisk(transformed3, "step15-1", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            saveImageToDisk(transformed3, "step15-1", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
 
-        matOriginalBeforeTrans = matOriginalPhoto.clone();
+        matOriginalBeforeTrans = colorImage.getMat();
+        saveImageToDisk(matOriginalBeforeTrans, "step-da", this, Imgproc.COLOR_RGBA2RGB, 901);
         transRes = checkLineBalance(transRes, pointBull, matOriginalBeforeTrans);
+        saveImageToDisk(matOriginalBeforeTrans, "step-db", this, Imgproc.COLOR_RGBA2RGB, 901);
+
         matOriginalBeforeTrans.release();
         {
-            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
             debugImage(transformed3, tableSideDistance, trippleDistance);
-            saveImageToDisk(transformed3, "step15-2", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            saveImageToDisk(transformed3, "step15-2", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
-        transRes = finalizeTransformationBase(matOriginalPhoto.clone(), pointBull, transRes);
+        transRes = finalizeTransformationBase(colorImage.getMat(), pointBull, transRes);
         {
-            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
             debugImage(transformed3, tableSideDistance, trippleDistance);
-            saveImageToDisk(transformed3, "step15-3", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            saveImageToDisk(transformed3, "step15-3", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
-        matOriginalBeforeTrans = matOriginalPhoto.clone();
+        matOriginalBeforeTrans = colorImage.getMat();
         transRes = checkLineBalance(transRes, pointBull, matOriginalBeforeTrans);
         {
-            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
             debugImage(transformed3, tableSideDistance, trippleDistance);
-            saveImageToDisk(transformed3, "step15-4", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            saveImageToDisk(transformed3, "step15-4", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
-        transRes = finalizeTransformationBase(matOriginalPhoto.clone(), pointBull, transRes);
+        transRes = finalizeTransformationBase(colorImage.getMat(), pointBull, transRes);
         {
-            Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+            Mat transformed3 = doTransform(transRes, colorImage.getMat());
             double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
             double tableSideDistance = 700 * trippleDistance / 290;
             debugImage(transformed3, tableSideDistance, trippleDistance);
-            saveImageToDisk(transformed3, "step15-5", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+            saveImageToDisk(transformed3, "step15-5", this, Imgproc.COLOR_RGBA2RGB, 15);
             transformed3.release();
         }
-        matOriginalBeforeTrans = matOriginalPhoto.clone();
+        matOriginalBeforeTrans = colorImage.getMat();
         transRes = checkLineBalance(transRes, pointBull, matOriginalBeforeTrans);
 
         // az utolsot megtartjuk, ez lesz a kimenet
-        Mat transformed3 = doTransform(transRes, matOriginalPhoto.clone());
+        Mat transformed3 = doTransform(transRes, colorImage.getMat());
         double trippleDistance = MLine.distanceOfTwoPoints(pointBull, transRes[0]) * 3;
         double tableSideDistance = 700 * trippleDistance / 290;
         debugImage(transformed3, tableSideDistance, trippleDistance);
-        saveImageToDisk(transformed3, "step15-6", "doki", this, Imgproc.COLOR_RGBA2RGB, 15);
+        saveImageToDisk(transformed3, "step15-6", this, Imgproc.COLOR_RGBA2RGB, 15);
 
 //  -------------------------------------------------
         int h = mImageView.getHeight();
         int w = mImageView.getWidth();
-        matOriginalCopy = transformed3;
+
+        Mat matOriginalCopy = transformed3;
 
         int rowStart = Math.max(0, (int) (pointBull.y - h / 2));
         int colStart = Math.max(0, (int) (pointBull.x - w / 2));
@@ -330,7 +331,7 @@ public class DokiPicture extends Activity {
         rowEnd += h - (rowEnd - rowStart); // ha nem pixel pontos, akkor itt javitjuk
         colEnd += w - (colEnd - colStart);
         matOriginalCopy = matOriginalCopy.submat(rowStart, rowEnd, colStart, colEnd);
-        //saveImageToDisk(matOriginalCopy, "step5-submat", "doki", this, Imgproc.COLOR_RGBA2RGB);
+        //saveImageToDisk(matOriginalCopy, "step5-submat", this, Imgproc.COLOR_RGBA2RGB);
 
         Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(matOriginalCopy, bitmap);
@@ -338,6 +339,70 @@ public class DokiPicture extends Activity {
 
         Log.i(TAG, ">>>> setPic end");
         mImageView.setImageBitmap(bitmap);
+    }
+
+    private String debugTransRes(Point[] transRes2) {
+        StringBuilder sb = new StringBuilder();
+        for(Point p : transRes2) {
+            sb.append(p.x+","+p.y+" ");
+        }
+        return sb.toString();
+    }
+    private String debugTransRes2(android.graphics.Point[] transRes2) {
+        StringBuilder sb = new StringBuilder();
+        for(android.graphics.Point p : transRes2) {
+            sb.append(p.x+","+p.y+" ");
+        }
+        return sb.toString();
+    }
+
+    private Point[] ptoa(android.graphics.Point[] transRes2) {
+        Point[] res = new Point[transRes2.length];
+        for(int i = 0; i < transRes2.length; i++) {
+            res[i] = new Point(transRes2[i].x, transRes2[i].y);
+        }
+        return res;
+    }
+
+    /**
+     * Find the bull on the picture.
+     * This is done by a CV.Canny filter -> CV.HoughLinesP -> findGoodLines -> findBullFromGoodLines -> bull
+     * @param colorImage
+     * @return
+     */
+    private Point findBull(ColorImage colorImage) {
+        Mat matOriginalPhoto = colorImage.getMat();
+
+        Log.i(TAG, "Photo loaded");
+        //saveImageToDisk(matOriginalPhoto, "step00-0-orig", this, Imgproc.COLOR_RGBA2RGB);
+
+        Mat matCannyGray = new Mat();
+        Imgproc.Canny(matOriginalPhoto, matCannyGray, paramCanny1, paramCanny2);
+        Log.i(TAG, "Canny processed");
+
+        Mat matLines = new Mat();
+        Imgproc.HoughLinesP(matCannyGray, matLines, 1, Math.PI/180, paramHLthreshold, paramHLminLineSize, paramHLlineGap);
+        Log.i(TAG, "HoughLinesP processed");
+
+        Mat matCannyRgba = new Mat();
+        Imgproc.cvtColor(matCannyGray, matCannyRgba, Imgproc.COLOR_GRAY2BGRA, 4);
+        //saveImageToDisk(matCanny, "step01-canny", this, Imgproc.COLOR_RGBA2RGB);
+        //matCannyRgba.release();
+
+//  -------------------------------------------------
+        // osszes vonal sargaval, es fontosak meghatarozasa
+        Log.i(TAG, "HL vonalak rajzolasa");
+        Mat matOriginalCopy = colorImage.getMat();
+        ArrayList<MLine> goodLines = findGoodLines(matLines, matOriginalCopy);
+        saveImageToDisk(matOriginalCopy, "step02-vonalak", this, Imgproc.COLOR_RGBA2RGB, 2);
+        //matLines.release();
+
+//  --------------------------------------------------------------------
+        // a fontos vonalak metszespontjait szamoljuk
+        Log.i(TAG, "HL fonos vonalak metszespontja");
+        Point pointBull = findBullFromGoodLines(goodLines, matOriginalCopy);
+        saveImageToDisk(matOriginalCopy, "step03-fontosVonalak", this, Imgproc.COLOR_RGBA2RGB, 8);
+        return pointBull;
     }
 
     /**
@@ -469,122 +534,7 @@ public class DokiPicture extends Activity {
         }
     }
 
-    /**
-     * Körülbelüli meghatározása a bull-ból kinduló vonalak szögének 0 foktól (0 lefele van a 3-as irányába)
-     * egyre nagyobb körökben nézzük meg a pontok színét addig, amíg találunk olyat, ami pontosan 20 felé osztja a kört.
-     * nem baj, ha nem pontos, mert nem ezt fogjuk majd használni. Ez csak arra kell, hogy ha találunk 4 pontos pontot, akkor
-     * meg tudjuk mondani, hogy a nem elforgatott táblán hova esnek azok a pontok.
-     * @param bull A bull
-     * @param matOriginalCopy A kép, amin keressük a színes pontokat.
-     * @return Szög lista, ahol kb a fekete/fehér szín váltások vannak
-     */
-    private ArrayList<Integer> findColorSegments(Point bull, Mat matOriginalCopy) {
-        double minDegreeDiff = 6;
-        double degreeStep = 1;
-        double distanceStart = 20;
-        double distanceStep = 5;
-        // TODO: A Mat objektumból olvassuk a pontokat, ami sokkal lassab, mintha kikérnénk egyszer az egészet
-        // plusz nem kell az egész Mat, csak egy része is elég lenne
-        Point p;
-        boolean found = false;
-        double currDistance = distanceStart;
-        ArrayList<ArrayList<Integer>> colorChanges = new ArrayList<ArrayList<Integer>>();
-        // Egyre nagyobb körökben degreeStep fokonként veszünk egy pontot és megnézzük milyen színű.
-        // Ha a körben pont 20 szín váltást találunk, akkor feljegyezzük a váltások helyét a
-        // colorChanges-be
-        while(!found) {
-            int prevColor = -1;
-            double prevStart = -1;
-            ArrayList<Integer> colorChange = new ArrayList<Integer>();
-            for (double i = 0; i < 360; i += degreeStep) {
-                p = MLine.rotatePoint(bull, i, currDistance);
-                if (p.y > matOriginalCopy.rows() || p.x > matOriginalCopy.cols()) {
-                    found = true;
-                    continue;
-                }
-                int color = PVec.getColor(matOriginalCopy.get((int) p.y, (int) p.x)) % 2;
-                if (prevColor == -1) {
-                    prevColor = color;
-                    prevStart = i;
-                }
-                if (prevColor != color) {
-                    colorChange.add((int) i);
-                    prevColor = color;
-                }
-            }
-            for(int i = 0; i < colorChange.size()-1; i++) {
-                if (colorChange.get(i+1) - colorChange.get(i) < minDegreeDiff) {
-                    colorChange.remove(i+1);
-                    colorChange.remove(i);
-                    i--;
-                }
-            }
-            if (colorChange.size() == 20) {
-                Log.i(TAG, "XXFCX;cella;"+colorChange.size()+";distance;"+currDistance+";cellak;"+debugArrayList(colorChange));
-                colorChanges.add(colorChange);
-            }
-            if (colorChanges.size() > 10) {
-                found = true;
-            }
-            currDistance += distanceStep;
-        }
 
-        // TODO: átolvassuk az adatokat egy másik tömbbe (valószínűleg feleslegesen)
-        ArrayList<ArrayList<Integer>> colorChanges2 = new ArrayList<ArrayList<Integer>>();
-        for(int i = 0; i < 20; i++) {
-            colorChanges2.add(new ArrayList<Integer>());
-        }
-        for(ArrayList<Integer> x: colorChanges) {
-            for(int i = 0; i < 20; i++) {
-                colorChanges2.get(i).add(x.get(i));
-            }
-        }
-        ArrayList<Integer> finalFields = new ArrayList<Integer>();
-        // az azonos pozícióba eső szín váltásokat a szög szerint rendezzük.
-        // Az első és az utolsó negyedet elhagyjuk
-        // a maradék átlagát vesszük, ez lesz a végleges becslés az adott szögre.
-        for(int i = 0; i < 20; i++) {
-            ArrayList<Integer> ai = colorChanges2.get(i);
-            Collections.sort(ai);
-            int sum = 0;
-            int count = 0;
-            for(int j = ai.size()/4; j <= 3 * ai.size() /4; j++) {
-                count++;
-                sum += ai.get(j);
-            }
-            finalFields.add(sum / count);
-        }
-        Log.i(TAG, "Final fields: " + debugArrayList(finalFields));
-        return finalFields;
-    }
-
-    /**
-     * 4 derekszogu vonal alapjan 4 pont meghatarozasa (0, 5, 10, 15 -os pont)
-     * A körülbelüli vonal felosztás alapján a 4 derékszögű irányban szintén kb meghatározzuk,
-     * hogy hol kezdődhet a trippla vonal.
-     * @param pointBull A bull
-     * @param matOriginalBeforeTrans Színes fotó
-     * @param segments A kb szög felosztása a bullból menő vonalaknak.
-     * @return Transzformációs mátrix
-     */
-    private Point[] getPointsForTransFromSegments2(Point pointBull, Mat matOriginalBeforeTrans, ArrayList<Integer> segments) {
-        Point[] res = new Point[8];
-        for(int i = 0; i < 4; i++) {
-            double degree = segments.get(i * 5).doubleValue();
-            res[i] = findCornerOnLine(pointBull, degree, matOriginalBeforeTrans);
-            Core.circle(matOriginalBeforeTrans, res[i], 4, new Scalar(255,255, 0));
-        }
-
-        // ezek a pontok a szemből nézett táblán itt vannak:
-        double ratio = 0.5;
-        Point frontBull = new Point(photoW * ratio, photoH * ratio);
-        double radius = 0.4 * photoH  * ratio;
-        for(int i = 0; i < 4; i++) {
-            res[4+i] = MLine.rotatePoint(frontBull, 9 + (i*5) * 18, radius);
-        }
-
-        return res;
-    }
 
     /**
      * Transzformációs mátrix módosítása, hogy a kör pontosabb kör legyen.
@@ -607,7 +557,7 @@ public class DokiPicture extends Activity {
             stepNum++;
             Mat matOrig1 = matOriginalPhoto.clone();
             ArrayList<ArrayList<Integer>> colorLineDistances = findColoredCirclesDistance(transRes, pointBull, matOrig1);
-            saveImageToDisk(matOrig1, "step13-" + stepNum, "doki", this, Imgproc.COLOR_RGBA2RGB, 13);
+            saveImageToDisk(matOrig1, "step13-" + stepNum, this, Imgproc.COLOR_RGBA2RGB, 13);
 
             // megpróbáljuk a színes kört egy igazi körre hozni
             // belso korok atlaga
@@ -708,7 +658,7 @@ public class DokiPicture extends Activity {
                 sumSumError += Math.abs(result.get(j));
             }
             Log.i(TAG, "lineBalance result, sum error: " + sumSumError + " values: " + result.get(0) + "," + result.get(1) + "," + result.get(2) + "," + result.get(3));
-            saveImageToDisk(mat, "step14-"+step, "doki", this, Imgproc.COLOR_RGBA2RGB, 14);
+            saveImageToDisk(mat, "step14-"+step, this, Imgproc.COLOR_RGBA2RGB, 14);
             if (sumSumError > prevSumError || maxId == -1) {
                 next = false;
                 transRes = prevTransRes;
@@ -806,8 +756,8 @@ public class DokiPicture extends Activity {
             Point start = MLine.rotatePoint(centerPoint, (degree + 90)%360, -50);
             Point end = MLine.rotatePoint(centerPoint, (degree + 90)%360, +50);
             lineToCheck.reset(transformPoint(start, invMat), transformPoint(end, invMat));
-            //Log.i(TAG, "Line to check, front ("+degree+"): " + start.x + "," + start.y + " - " + end.x +","+end.y+" transformed: " + lineToCheck.start.x + "," + lineToCheck.start.y + " - " + lineToCheck.end.x +","+lineToCheck.end.y);
             int colorNum = getColoredPixelNumOnLine(lineToCheck, matOriginal);
+            //Log.i(TAG, "Line to check, front ("+degree+"): colorNum: " + colorNum + " " + start.x + "," + start.y + " - " + end.x +","+end.y+" transformed: " + lineToCheck.start.x + "," + lineToCheck.start.y + " - " + lineToCheck.end.x +","+lineToCheck.end.y);
             if (currDistance > 600) {
                 break;
             }
@@ -830,6 +780,7 @@ public class DokiPicture extends Activity {
             }
         }
         Log.i(TAG, "szinek listaja: degree(" + degree + "): " + debugArrayList(regions));
+        saveImageToDisk(matOriginal, "step-dd", this, Imgproc.COLOR_RGBA2RGB, 901);
 
         return regions;
     }
@@ -860,7 +811,7 @@ public class DokiPicture extends Activity {
             if (color > 1) {
                 coloredPixel++;
             }
-            //Core.line(mat, currP, currP, colors[color]);
+            Core.line(mat, currP, currP, colors[color]);
         }
         return coloredPixel;
     }
@@ -975,56 +926,15 @@ public class DokiPicture extends Activity {
         Point[] invRes = new Point[]{t[4], t[5], t[6], t[7], t[0], t[1], t[2], t[3]};
         return getTransformationMatrix(invRes);
     }
+    private double[][] invertTransMatrix(android.graphics.Point[] t) {
+        android.graphics.Point[] invRes = new android.graphics.Point[]{t[4], t[5], t[6], t[7], t[0], t[1], t[2], t[3]};
+        return getTransformationMatrix(invRes);
+    }
     private Point transformPoint(Point p, Mat m) {
         double m1 = p.x*m.get(0,0)[0] + p.y * m.get(0,1)[0] + m.get(0,2)[0];
         double m2 = p.x*m.get(1,0)[0] + p.y * m.get(1,1)[0] + m.get(1,2)[0];
         double m3 = p.x*m.get(2,0)[0] + p.y * m.get(2,1)[0] + m.get(2,2)[0];
         return new Point(m1/m3, m2/m3);
-    }
-
-    /**
-     * Megkeressük az első potenciális trippla kereszteződést a szög mentén haladva.
-     * @param bull a bull
-     * @param degree a szög, amin haladunk
-     * @param matColor színes kép
-     * @return a pont, ahol valószínűleg a trippla kezdődik a vonalon
-     */
-    private Point findCornerOnLine(Point bull, double degree, Mat matColor) {
-        double distanceStart = 20 - 1;
-        int searchWidth = 5;
-        boolean found = false;
-        double currDistance = distanceStart;
-        Point p;
-        Point pSave = null;
-        int color=0;
-        while(!found) {
-            currDistance += 1;
-            int count = 0;
-            int colorCount = 0;
-            for(int i = -1 * searchWidth; i <= searchWidth; i++) {
-                count++;
-                p = MLine.rotatePoint(bull, degree + i, currDistance);
-                if (i == 0) {
-                    pSave = p;
-                }
-                try {
-                    color = PVec.getColor(matColor.get((int) p.y, (int) p.x));
-                }catch (Exception e) {
-                    Log.i(TAG, "EXCEDPTION currDistance: " + currDistance + " x: " + p.x + " y: " + p.y + " colorCount: " + colorCount + " count: " + count);
-                    found = true;
-                }
-                if (color > 1) {
-                    colorCount++;
-                }
-            }
-            if ((float)colorCount / count > 0.4) {
-                Log.i(TAG, "currDistance(FOUND): " + currDistance + " colorCount: " + colorCount + " count: " + count);
-                found = true;
-            } else {
-                //Log.i(TAG, "currDistance: " + currDistance + " colorCount: " + colorCount + " count: " + count);
-            }
-        }
-        return pSave;
     }
 
     private void debugImage(Mat transformed3, double tableSideDistance, double trippleDistance) {
@@ -1038,7 +948,6 @@ public class DokiPicture extends Activity {
         Core.circle(transformed3, nBull, (int)trippleDistance, colorx);
         Core.circle(transformed3, nBull, (int)tableSideDistance, colorx);
     }
-
 
     private String debugArrayList(ArrayList a) {
         StringBuilder sb = new StringBuilder();
@@ -1070,37 +979,30 @@ public class DokiPicture extends Activity {
 
         return Imgproc.getPerspectiveTransform(startM, endM);
     }
+    private double[][] getTransformationMatrix(android.graphics.Point[] trn) {
+        double[][] res = new double[3][3];
+        List<Point> src_pnt = new ArrayList<Point>();
+        for(int i = 0; i < trn.length/2; i++) {
+            src_pnt.add(new Point(trn[i].x, trn[i].y));
+        }
+        Mat startM = Converters.vector_Point2f_to_Mat(src_pnt);
 
-    /**
-     * mCurrentPhotoPath-ból a fájl betöltése egy Mat objektumba
-     * @return a színes eredeti fotó Mat-ként
-     */
-    private Mat getOriginalPhotoMat() {
-        // Get the dimensions of the bitmap
-        BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-        bmOptions.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(mCurrentPhotoPath, bmOptions);
-        photoW = bmOptions.outWidth;
-        photoH = bmOptions.outHeight;
+        List<Point> dst_pnt = new ArrayList<Point>();
+        for(int i = trn.length/2; i < trn.length; i++) {
+            dst_pnt.add(new Point(trn[i].x, trn[i].y));
+        }
+        Mat endM = Converters.vector_Point2f_to_Mat(dst_pnt);
 
-        // Determine how much to scale down the image
-        //int scaleFactor = Math.min(photoW / mImageViewW, photoH / mImageViewH);
-
-        // Decode the image file into a Bitmap sized to fill the View
-        bmOptions.inJustDecodeBounds = false;
-        // ez nem tudom kell-e!!
-        //bmOptions.inSampleSize = scaleFactor;
-        bmOptions.inPurgeable = true;
-
-        Bitmap bitmap = BitmapFactory.decodeFile(mCurrentPhotoPath, bmOptions);
-
-        Mat imgMAT = new Mat();
-        Bitmap bmp32 = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-        Utils.bitmapToMat(bmp32, imgMAT);
-        return imgMAT;
+        Mat resmat = Imgproc.getPerspectiveTransform(startM, endM);
+        for(int i = 0; i < 3; i++) {
+            for(int j = 0; j < 3; j++) {
+                res[i][j] = resmat.get(i,j)[0];
+            }
+        }
+        return res;
     }
 
-    public void saveImageToDisk(Mat source, String filename, String directoryName, Context ctx, int colorConversion, int level){
+    public void saveImageToDisk(Mat source, String filename, Context ctx, int colorConversion, int level){
         if (saveStepsToImage == level || saveStepsToImage < 0) {
             Mat mat = source.clone();
             if (colorConversion != -1)
@@ -1113,7 +1015,7 @@ public class DokiPicture extends Activity {
                 mat.release();
                 OutputStream fout;
                 String root = Environment.getExternalStorageDirectory().getAbsolutePath();
-                String dir = root + "/" + ctx.getResources().getString(R.string.app_name) + "/" + directoryName;
+                String dir = root + "/doki";
                 String fileName = filename;
                 if (!filename.contains(".jpg")) {
                     fileName = filename + ".png";
